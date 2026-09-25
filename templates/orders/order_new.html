@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}New Order · Orbit ERP{% endblock %}
+{% block content %}
+<div class="erp-page-header">
+  <h1><i class="bi bi-plus-square"></i> New Order</h1>
+  <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Orders</a>
+</div>
+
+<div class="stepper mb-4">
+  <span class="step now"><b>1</b> Order</span><span class="step locked"><b>2</b> Line Items</span><span class="step locked"><b>3</b> Assortment</span><span class="step locked"><b>4</b> BOM</span><span class="step locked"><b>5</b> Costing</span><span class="step locked"><b>6</b> Supplier PO</span>
+</div>
+
+<div class="erp-card p-4" style="max-width:980px">
+  <form method="post">
+    {% csrf_token %}
+    <div class="row g-3">
+      {% include "orders/_field.html" with field=form.po_number %}
+      {% include "orders/_field.html" with field=form.buyer %}
+      {% include "orders/_field.html" with field=form.factory %}
+      {% include "orders/_field.html" with field=form.ship_date %}
+      {% include "orders/_field.html" with field=form.currency cls="col-md-2" %}
+      {% include "orders/_field.html" with field=form.status cls="col-md-2" %}
+      {% include "orders/_field.html" with field=form.remarks cls="col-12" %}
+    </div>
+    <div class="erp-form-actions mt-3">
+      <button class="btn btn-erp-primary"><i class="bi bi-arrow-right-circle"></i> Create order &amp; add line items</button>
+    </div>
+  </form>
+</div>
+{% include "orders/_datalists.html" %}
+{% endblock %}

@@ -1,0 +1,98 @@
+{% load orbit %}
+{% if pending %}
+<div class="erp-card p-4 mb-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+    <div>
+      <h2 class="card-title-sm mb-1"><i class="bi bi-hourglass-split"></i> Materials not on a PO yet</h2>
+      <div class="text-muted small">Generating makes one PO per supplier. Identical rows (same item, color, spec and price) are merged and quantities rounded up.</div>
+    </div>
+    <form method="post" action="{% url 'po_generate' order.pk %}">{% csrf_token %}
+      <button class="btn btn-erp-primary" {% if not can_generate %}disabled{% endif %}><i class="bi bi-magic"></i> Generate supplier POs</button>
+    </form>
+  </div>
+  <div class="row g-2 mt-2">
+    {% for g in pending %}
+      <div class="col-md-6 col-xl-4">
+        <div class="pending-box {% if not g.has_supplier %}warn{% endif %}">
+          <div class="fw-semibold">{{ g.supplier }} <span class="text-muted fw-normal">· {{ g.rows|length }} row(s)</span></div>
+          <div class="small text-muted">{{ g.items|join:", " }}</div>
+          {% if not g.has_supplier %}<div class="small text-danger mt-1">Set a supplier on these BOM items to include them.</div>{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% elif not pos %}
+<div class="alert alert-info">No BOM materials to order.</div>
+{% endif %}
+
+{% for po, f in pos %}
+<div class="erp-card mb-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 border-bottom">
+    <div>
+      <span class="fw-bold fs-5">{{ po.po_no }}</span>
+      <span class="ms-2 fs-6">{{ po.supplier }}</span>
+      <span class="badge po-status-{{ po.status }} ms-1">{{ po.get_status_display }}</span>
+      <div class="small text-muted mt-1">
+        PO date {{ po.po_date|date:"d M Y" }}
+        {% if po.delivery_date %} · Delivery {{ po.delivery_date|date:"d M Y" }}{% endif %}
+        {% if po.pi_no %} · PI {{ po.pi_no }}{% endif %}{% if po.lc_no %} · LC {{ po.lc_no }}{% endif %}
+        {% if po.etd %} · ETD {{ po.etd|date:"d M" }}{% endif %}{% if po.eta %} · ETA {{ po.eta|date:"d M" }}{% endif %}
+      </div>
+    </div>
+    <div class="d-flex gap-1">
+      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#poModal{{ po.pk }}"><i class="bi bi-pencil"></i> Details</button>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_print' po.pk %}" target="_blank"><i class="bi bi-printer"></i> Print</a>
+      <button class="btn btn-sm btn-outline-danger" form="pod{{ po.pk }}" data-confirm="Delete {{ po.po_no }}? Its materials go back to the 'not on a PO' list."><i class="bi bi-trash"></i></button>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle po-lines">
+      <thead><tr><th>#</th><th>Style</th><th>Item</th><th>Color</th><th>Size / spec</th><th class="text-end" style="width:130px">Qty</th><th>Unit</th>
+        {% if is_admin %}<th class="text-end" style="width:120px">Price</th><th class="text-end">Amount</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for l in po.lines.all %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td><td>{{ l.style }}</td><td>{{ l.description }}</td><td>{{ l.color }}</td><td>{{ l.spec }}</td>
+          <td><input class="form-control form-control-sm text-end" type="number" step="any" min="0" name="l-{{ l.pk }}-qty" value="{{ l.qty|plain }}" form="pol{{ po.pk }}"></td>
+          <td>{{ l.unit }}</td>
+          {% if is_admin %}
+          <td><input class="form-control form-control-sm text-end" type="number" step="any" min="0" name="l-{{ l.pk }}-price" value="{{ l.price|plain }}" form="pol{{ po.pk }}"></td>
+          <td class="text-end">{{ l.amount|num:2 }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr>
+        <td colspan="{% if is_admin %}8{% else %}7{% endif %}" class="text-end">
+          <button class="btn btn-sm btn-outline-primary" form="pol{{ po.pk }}"><i class="bi bi-save"></i> Save quantities</button>
+        </td>
+        {% if is_admin %}<td class="text-end fw-bold">{{ po.total_amount|num:2 }}</td>{% endif %}
+      </tr></tfoot>
+    </table>
+  </div>
+</div>
+<form id="pol{{ po.pk }}" method="post" action="{% url 'po_lines_save' order.pk po.pk %}">{% csrf_token %}</form>
+<form id="pod{{ po.pk }}" method="post" action="{% url 'po_delete' order.pk po.pk %}">{% csrf_token %}</form>
+
+<div class="modal fade" id="poModal{{ po.pk }}" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <form method="post" action="{% url 'po_update' order.pk po.pk %}">
+      {% csrf_token %}
+      <div class="modal-header"><h5 class="modal-title">{{ po.po_no }} details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><div class="row g-3">
+        {% include "orders/_field.html" with field=f.supplier cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.status cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.po_date cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.delivery_date cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.pi_no cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.lc_no cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.etd cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.eta cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.notes cls="col-12" %}
+      </div></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-erp-primary"><i class="bi bi-save"></i> Save</button></div>
+    </form>
+  </div></div>
+</div>
+{% endfor %}

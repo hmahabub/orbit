@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load orbit %}
+{% block title %}Orders · Orbit ERP{% endblock %}
+{% block content %}
+<div class="erp-page-header">
+  <h1><i class="bi bi-clipboard-check"></i> {% if status == 'running' %}Running Orders{% else %}Orders{% endif %}</h1>
+  <a href="{% url 'order_create' %}" class="btn btn-erp-primary"><i class="bi bi-plus-lg"></i> New Order</a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg"><div class="erp-card kpi-card"><div class="kpi-value">{{ kpis.count }}</div><div class="kpi-label">Running orders</div></div></div>
+  <div class="col-6 col-lg"><div class="erp-card kpi-card"><div class="kpi-value">{{ kpis.qty|num:0 }}</div><div class="kpi-label">Pcs in hand</div></div></div>
+  <div class="col-6 col-lg"><div class="erp-card kpi-card kpi-green"><div class="kpi-value">${{ kpis.value|num:0 }}</div><div class="kpi-label">Order value</div></div></div>
+  <div class="col-6 col-lg"><div class="erp-card kpi-card kpi-amber"><div class="kpi-value">{{ kpis.due_soon }}</div><div class="kpi-label">Ship within 14 days</div></div></div>
+  <div class="col-6 col-lg"><div class="erp-card kpi-card kpi-red"><div class="kpi-value">{{ kpis.overdue }}</div><div class="kpi-label">Past ship date</div></div></div>
+</div>
+
+<div class="erp-card">
+  <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center p-3 border-bottom">
+    <ul class="nav nav-pills erp-pills">
+      {% for key, label in status_choices %}
+        <li class="nav-item"><a class="nav-link {% if status == key %}active{% endif %}" href="?status={{ key }}{% if q %}&q={{ q|urlencode }}{% endif %}">{{ label }}</a></li>
+      {% endfor %}
+      <li class="nav-item"><a class="nav-link {% if status == 'all' %}active{% endif %}" href="?status=all{% if q %}&q={{ q|urlencode }}{% endif %}">All</a></li>
+    </ul>
+    <form class="d-flex gap-2" method="get">
+      <input type="hidden" name="status" value="{{ status }}">
+      <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Search PO, buyer, style…" style="min-width:220px">
+      <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table erp-table mb-0">
+      <thead><tr>
+        <th>Order</th><th>Buyer PO</th><th>Buyer</th><th>Description</th><th>Factory</th>
+        <th class="text-end">Qty</th><th class="text-end">Value</th><th>Ship date</th><th>Progress</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+      {% for o in orders %}
+        <tr class="clickable" data-href="{% url 'order_detail' o.pk %}">
+          <td><a class="fw-semibold" href="{% url 'order_detail' o.pk %}">{{ o.order_no }}</a></td>
+          <td class="fw-semibold">{{ o.po_number }}</td>
+          <td>{{ o.buyer }}</td>
+          <td class="text-truncate" style="max-width:260px">{{ o.descriptions|default:"—" }}</td>
+          <td>{{ o.factory|default:"—" }}</td>
+          <td class="text-end">{{ o.total_qty|num:0 }}</td>
+          <td class="text-end">{{ o.total_amount|num:2 }}</td>
+          <td class="text-nowrap">{% if o.ship_date %}<span class="status-dot {{ o.ship_status }}"></span>{{ o.ship_date|date:"d M Y" }}{% else %}—{% endif %}</td>
+          <td>
+            <div class="stage-track" title="{% for l in stage_labels %}{% if forloop.counter == o.stage %}Current: {{ l }}{% endif %}{% endfor %}">
+              {% for l in stage_labels %}<span class="{% if forloop.counter < o.stage %}done{% elif forloop.counter == o.stage %}now{% endif %}"></span>{% endfor %}
+            </div>
+            <small class="text-muted">{% for l in stage_labels %}{% if forloop.counter == o.stage %}{{ l }}{% endif %}{% endfor %}</small>
+          </td>
+          <td><span class="badge status-{{ o.status }}">{{ o.get_status_display }}</span></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="10" class="text-center text-muted py-5">
+          No orders here yet. <a href="{% url 'order_create' %}">Create the first order</a>.
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% load static orbit %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ po.po_no }} · {{ po.supplier }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{% static 'css/style.css' %}" rel="stylesheet">
+</head>
+<body class="print-body">
+<div class="print-sheet">
+  <div class="no-print text-end mb-3">
+    <button class="btn btn-erp-primary btn-sm" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+  <div class="print-head">
+    <div>
+      <div class="print-brand">OR<span>BIT</span></div>
+      <div class="small">Purchase Order</div>
+    </div>
+    <div class="text-end">
+      <div class="print-po-no">{{ po.po_no }}</div>
+      <div class="small">Date: {{ po.po_date|date:"d M Y" }}</div>
+    </div>
+  </div>
+
+  <table class="table table-sm table-bordered print-info">
+    <tr><th>Supplier</th><td>{{ po.supplier }}</td><th>Buyer PO</th><td>{{ po.order.po_number }}</td></tr>
+    <tr><th>Buyer</th><td>{{ po.order.buyer }}</td><th>Factory</th><td>{{ po.order.factory|default:"—" }}</td></tr>
+    <tr><th>Required delivery</th><td>{{ po.delivery_date|date:"d M Y"|default:"—" }}</td><th>Ship date</th><td>{{ po.order.ship_date|date:"d M Y"|default:"—" }}</td></tr>
+    {% if po.pi_no or po.lc_no %}<tr><th>PI no.</th><td>{{ po.pi_no|default:"—" }}</td><th>LC no.</th><td>{{ po.lc_no|default:"—" }}</td></tr>{% endif %}
+  </table>
+
+  <table class="table table-sm table-bordered align-middle">
+    <thead class="table-dark"><tr>
+      <th>#</th><th>Style</th><th>Item</th><th>Color</th><th>Size / spec</th><th class="text-end">Qty</th><th>Unit</th>
+      {% if is_admin %}<th class="text-end">Price</th><th class="text-end">Amount</th>{% endif %}
+    </tr></thead>
+    <tbody>
+    {% for l in po.lines.all %}
+      <tr><td>{{ forloop.counter }}</td><td>{{ l.style }}</td><td>{{ l.description }}</td><td>{{ l.color }}</td><td>{{ l.spec }}</td>
+        <td class="text-end">{{ l.qty|num:0 }}</td><td>{{ l.unit }}</td>
+        {% if is_admin %}<td class="text-end">{{ l.price|num:4 }}</td><td class="text-end">{{ l.amount|num:2 }}</td>{% endif %}</tr>
+    {% endfor %}
+    </tbody>
+    {% if is_admin %}
+    <tfoot><tr class="fw-bold"><td colspan="8" class="text-end">Total ({{ po.order.currency }})</td><td class="text-end">{{ po.total_amount|num:2 }}</td></tr></tfoot>
+    {% endif %}
+  </table>
+
+  {% if po.notes %}<p class="small"><b>Notes:</b> {{ po.notes|linebreaksbr }}</p>{% endif %}
+
+  <div class="print-sign">
+    <div>Prepared by</div><div>Checked by</div><div>Authorized signature</div>
+  </div>
+</div>
+</body>
+</html>

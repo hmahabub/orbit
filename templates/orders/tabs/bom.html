@@ -1,0 +1,94 @@
+{% load orbit %}
+<div class="erp-card p-3 mb-3 assort-summary">
+  <div><span class="text-muted">Style</span> <b>{{ line.style }}</b> <span class="text-muted">· {{ line.description }}</span></div>
+  <div class="d-flex flex-wrap gap-2">
+    {% for c in line.assortment.all %}<span class="chip">{{ c.color }} <b>{{ c.total|num:0 }}</b></span>{% endfor %}
+    <span class="chip-sep"></span>
+    {% for i in line.active_size_indexes %}<span class="chip chip-size">{{ line.sizes|at:i }} <b>{{ line|size_total:i|num:0 }}</b></span>{% endfor %}
+    <span class="chip chip-total">Total <b>{{ line.bom_qty|num:0 }}</b></span>
+  </div>
+</div>
+
+<div class="erp-card mb-3">
+  <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+    <h2 class="card-title-sm mb-0"><i class="bi bi-diagram-3"></i> Material allocation (BOM) — {{ line.style }}</h2>
+    {% if items %}<button class="btn btn-sm btn-erp-primary" form="bomForm"><i class="bi bi-save"></i> Save BOM</button>{% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="table sheet mb-0">
+      <thead><tr>
+        <th class="c-sl">Sl</th><th class="c-item">Item</th><th class="c-place">Placement</th>
+        <th class="c-alloc">Allocation</th><th class="c-body">Body color</th><th class="c-combo">Color combination</th>
+        <th class="c-spec">Size / spec</th><th class="c-qty text-end">Order qty</th><th class="c-cons text-end">Cons. / pc</th>
+        <th class="c-req text-end">Total req.</th><th class="c-unit">Unit</th><th class="c-sup">Supplier</th><th class="c-x"></th>
+      </tr></thead>
+      <tbody>
+      {% for item in items %}
+        {% with n=item.row_list|length %}
+        {% for row in item.row_list %}
+        <tr class="calc-row {% if forloop.first %}item-first{% endif %}" data-auto="{{ row.auto_qty }}">
+          {% if forloop.first %}
+          <td rowspan="{{ n }}" class="c-sl text-center text-muted">{{ forloop.parentloop.counter }}</td>
+          <td rowspan="{{ n }}" class="item-cell"><textarea name="i-{{ item.pk }}-name" form="bomForm" rows="1" required>{{ item.name }}</textarea></td>
+          <td rowspan="{{ n }}" class="item-cell"><input name="i-{{ item.pk }}-placement" value="{{ item.placement }}" form="bomForm" list="dl-placements"></td>
+          <td rowspan="{{ n }}" class="item-cell">
+            <select name="i-{{ item.pk }}-allocation" form="bomForm" title="Changing this rebuilds the rows">
+              {% for key, label in allocations %}<option value="{{ key }}" {% if key == item.allocation %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+          </td>
+          {% endif %}
+          <td class="ro">{{ row.body_label }}</td>
+          <td><input name="r-{{ row.pk }}-combo" value="{{ row.color_combo }}" form="bomForm" list="dl-colors"></td>
+          <td><div class="d-flex align-items-center">{% if row.size_label %}<span class="size-tag">{{ row.size_label }}</span>{% endif %}<input name="r-{{ row.pk }}-spec" value="{{ row.spec }}" form="bomForm"></div></td>
+          <td><input class="text-end js-qty {% if row.qty_override is not None %}overridden{% endif %}" type="number" min="0" name="r-{{ row.pk }}-qty" value="{{ row.qty_override|default_if_none:'' }}" placeholder="{{ row.auto_qty|num:0 }}" form="bomForm" title="Blank = from assortment"></td>
+          <td><input class="text-end js-cons" type="number" step="any" min="0" name="r-{{ row.pk }}-cons" value="{{ row.consumption|fixed:6 }}" form="bomForm"></td>
+          <td class="req-cell"><input class="text-end fw-semibold js-req" type="number" step="any" min="0" name="r-{{ row.pk }}-req" value="{{ row.requirement|fixed:2 }}" form="bomForm"><input type="hidden" class="js-src" name="r-{{ row.pk }}-src" value="" form="bomForm"></td>
+          {% if forloop.first %}
+          <td rowspan="{{ n }}" class="item-cell"><input name="i-{{ item.pk }}-unit" value="{{ item.unit }}" form="bomForm" list="dl-units"></td>
+          <td rowspan="{{ n }}" class="item-cell"><input name="i-{{ item.pk }}-supplier" value="{{ item.supplier }}" form="bomForm" list="dl-suppliers"></td>
+          <td rowspan="{{ n }}" class="item-cell text-center"><button class="btn btn-link btn-sm text-danger p-0" form="del{{ item.pk }}" title="Remove material" data-confirm="Remove {{ item.name }} from the BOM?"><i class="bi bi-x-lg"></i></button></td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+        {% endwith %}
+      {% empty %}
+        <tr><td colspan="13" class="text-center text-muted py-4">No materials yet — type the first one in the row below.</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        {% with f=new_item_form %}
+        <tr class="add-row">
+          <td class="c-sl text-center"><i class="bi bi-plus-lg"></i></td>
+          <td>{{ f.name }}</td>
+          <td>{{ f.placement }}</td>
+          <td>{{ f.allocation }}</td>
+          <td class="ro text-muted small">auto</td>
+          <td>{{ f.color_combo }}</td>
+          <td>{{ f.spec }}</td>
+          <td class="ro text-muted small text-end">auto</td>
+          <td>{{ f.consumption }}</td>
+          <td>{{ f.total_req }}</td>
+          <td>{{ f.unit }}</td>
+          <td>{{ f.supplier }}</td>
+          <td class="text-center"><button class="btn btn-sm btn-erp-primary px-2" form="addForm" title="Add material"><i class="bi bi-plus-lg"></i></button></td>
+        </tr>
+        {% endwith %}
+      </tfoot>
+    </table>
+  </div>
+  <div class="px-3 py-2 border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <small class="text-muted">Type either Cons. / pc or Total req. — the other is calculated (Total req. = order qty × cons. / pc). Order qty comes from the assortment; type a number to override it.</small>
+    {% if items %}<button class="btn btn-sm btn-erp-primary" form="bomForm"><i class="bi bi-save"></i> Save BOM</button>{% endif %}
+  </div>
+</div>
+
+<form id="bomForm" method="post" action="{% url 'bom_save' order.pk line.pk %}">{% csrf_token %}</form>
+<form id="addForm" method="post" action="{% url 'bom_item_add' order.pk line.pk %}">{% csrf_token %}</form>
+{% for item in items %}
+<form id="del{{ item.pk }}" method="post" action="{% url 'bom_item_delete' order.pk item.pk %}">{% csrf_token %}</form>
+{% endfor %}
+
+{% if lines_without_bom and order.stage < 5 %}
+  <div class="alert alert-warning py-2">Still needs materials: {% for ln in lines_without_bom %}<a href="?tab=bom&line={{ ln.pk }}">{{ ln.style }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+{% endif %}
+{% include "orders/tabs/_continue.html" with next_stage=5 next_key="costing" next_label="Costing" hint="Once every style has its materials, hand the BOM over to costing." %}

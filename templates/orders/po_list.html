@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load orbit %}
+{% block title %}Supplier PO · Orbit ERP{% endblock %}
+{% block content %}
+<div class="erp-page-header">
+  <h1><i class="bi bi-truck"></i> Supplier PO</h1>
+  <form class="d-flex gap-2" method="get">
+    <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Supplier, buyer PO, PI, LC…" style="min-width:240px">
+    <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
+  </form>
+</div>
+<div class="erp-card">
+  <div class="table-responsive">
+    <table class="table erp-table mb-0">
+      <thead><tr><th>PO no.</th><th>Supplier</th><th>Buyer PO</th><th>PO date</th><th>Delivery</th><th>PI</th><th>LC</th><th>ETD</th><th>ETA</th><th class="text-end">Lines</th>{% if is_admin %}<th class="text-end">Amount</th>{% endif %}<th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for po in pos %}
+        <tr>
+          <td class="fw-semibold"><a href="{% url 'order_detail' po.order.pk %}?tab=po">{{ po.po_no }}</a></td>
+          <td>{{ po.supplier }}</td>
+          <td><a href="{% url 'order_detail' po.order.pk %}">{{ po.order.po_number }}</a></td>
+          <td>{{ po.po_date|date:"d M Y" }}</td>
+          <td>{{ po.delivery_date|date:"d M Y"|default:"—" }}</td>
+          <td>{{ po.pi_no|default:"—" }}</td>
+          <td>{{ po.lc_no|default:"—" }}</td>
+          <td>{{ po.etd|date:"d M"|default:"—" }}</td>
+          <td>{{ po.eta|date:"d M"|default:"—" }}</td>
+          <td class="text-end">{{ po.lines.all|length }}</td>
+          {% if is_admin %}<td class="text-end">{{ po.total_amount|num:2 }}</td>{% endif %}
+          <td><span class="badge po-status-{{ po.status }}">{{ po.get_status_display }}</span></td>
+          <td><a class="btn btn-sm btn-outline-secondary" href="{% url 'po_print' po.pk %}" target="_blank" title="Print"><i class="bi bi-printer"></i></a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="13" class="text-center text-muted py-5">No supplier POs yet. They are generated from an order's Supplier PO tab.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

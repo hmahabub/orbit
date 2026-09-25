@@ -1,0 +1,121 @@
+{% load orbit %}
+<div class="row g-3 mb-3">
+  <div class="col-xxl-9">
+    <div class="erp-card">
+      <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+        <h2 class="card-title-sm mb-0"><i class="bi bi-calculator"></i> Cost sheet — {{ line.style }} <span class="badge erp-badge-admin ms-1"><i class="bi bi-shield-lock"></i> Admin only</span></h2>
+        <button class="btn btn-sm btn-erp-primary" form="priceForm"><i class="bi bi-save"></i> Save prices</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table sheet mb-0" id="costTable">
+          <thead><tr>
+            <th class="c-sl">Sl</th><th class="c-item">Item</th><th>Body color</th><th>Color combination</th><th>Size / spec</th>
+            <th class="text-end">Order qty</th><th class="text-end">Total req.</th><th>Unit</th>
+            <th class="c-price text-end">Price</th><th class="text-end">TTL amount</th><th>Supplier</th>
+          </tr></thead>
+          <tbody>
+          {% for item in items %}
+            {% with n=item.row_list|length %}
+            {% for row in item.row_list %}
+            <tr class="price-row {% if forloop.first %}item-first{% endif %}" data-req="{{ row.requirement|plain }}">
+              {% if forloop.first %}
+              <td rowspan="{{ n }}" class="c-sl text-center text-muted">{{ forloop.parentloop.counter }}</td>
+              <td rowspan="{{ n }}" class="ro item-name">
+                {{ item.name }}
+                {% if n > 1 %}
+                <div class="d-flex align-items-center mt-1 no-print set-all">
+                  <input type="number" step="any" min="0" class="set-all-price" placeholder="Price for all rows">
+                  <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 apply-all-price" title="Apply to every row of this item"><i class="bi bi-arrow-down"></i></button>
+                </div>
+                {% endif %}
+              </td>
+              {% endif %}
+              <td class="ro">{{ row.body_label }}</td>
+              <td class="ro">{{ row.color_combo }}</td>
+              <td class="ro">{% if row.size_label %}<span class="size-tag">{{ row.size_label }}</span>{% endif %}{% if row.spec != row.size_label %}{{ row.spec }}{% endif %}</td>
+              <td class="ro text-end">{{ row.order_qty|num:0 }}</td>
+              <td class="ro text-end">{{ row.requirement|num:2 }}</td>
+              {% if forloop.first %}<td rowspan="{{ n }}" class="ro">{{ item.unit }}</td>{% endif %}
+              <td><input class="text-end js-price {% if row.price is None %}is-missing{% endif %}" type="number" step="any" min="0" name="r-{{ row.pk }}-price" value="{{ row.price|plain }}" form="priceForm" data-item="{{ item.pk }}"></td>
+              <td class="ro text-end fw-semibold js-amount">{{ row.amount|num:2 }}</td>
+              {% if forloop.first %}<td rowspan="{{ n }}" class="ro">{{ item.supplier }}</td>{% endif %}
+            </tr>
+            {% endfor %}
+            {% endwith %}
+          {% empty %}
+            <tr><td colspan="11" class="text-center text-muted py-4">No BOM materials for this style yet.</td></tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr class="fw-bold">
+            <td colspan="9" class="text-end">Total material cost</td>
+            <td class="text-end" id="materialTotal">{{ costing.material_total|num:2 }}</td><td></td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>
+    <form id="priceForm" method="post" action="{% url 'costing_save' order.pk line.pk %}">{% csrf_token %}</form>
+  </div>
+
+  <div class="col-xxl-3">
+    <div class="erp-card p-3 mb-3 cost-summary" data-qty="{{ line.qty }}" data-fob="{{ costing.fob|plain }}" data-extras="{{ costing.extras_pc|plain }}">
+      <h2 class="card-title-sm">Summary · {{ line.qty|num:0 }} pcs</h2>
+      <dl class="row mb-0">
+        <dt class="col-7">Material / dozen</dt><dd class="col-5 text-end" id="sumDz">{{ costing.material_dz|num:4 }}</dd>
+        <dt class="col-7">Material / pc</dt><dd class="col-5 text-end" id="sumPc">{{ costing.material_pc|num:4 }}</dd>
+        <dt class="col-7">Other costs / pc</dt><dd class="col-5 text-end">{{ costing.extras_pc|num:4 }}</dd>
+        <dt class="col-7 border-top pt-1">Total cost / pc</dt><dd class="col-5 text-end border-top pt-1 fw-bold" id="sumTotal">{{ costing.total_pc|num:4 }}</dd>
+        <dt class="col-7">FOB / pc</dt><dd class="col-5 text-end">{{ costing.fob|num:4 }}</dd>
+        <dt class="col-7">Margin / pc</dt><dd class="col-5 text-end fw-bold {% if costing.margin_pc < 0 %}text-danger{% else %}text-success{% endif %}" id="sumMargin">{{ costing.margin_pc|num:4 }}</dd>
+        <dt class="col-7">Margin %</dt><dd class="col-5 text-end" id="sumMarginPct">{{ costing.margin_pct|num:1 }}%</dd>
+        <dt class="col-7">Order margin</dt><dd class="col-5 text-end fw-bold" id="sumMarginTotal">{{ costing.margin_total|num:2 }}</dd>
+      </dl>
+      {% if costing.unpriced %}<div class="alert alert-warning py-1 px-2 small mt-3 mb-0">{{ costing.unpriced }} row(s) still need a price.</div>{% endif %}
+    </div>
+
+    <div class="erp-card p-3">
+      <h2 class="card-title-sm">Other costs / pc</h2>
+      {% for e in costing.extras %}
+        <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+          <span>{{ e.name }}</span>
+          <span>{{ e.cost_per_pc|num:4 }}
+            <button class="btn btn-sm btn-link text-danger p-0 ms-1" form="xd{{ e.pk }}" title="Remove"><i class="bi bi-x-lg"></i></button></span>
+        </div>
+        <form id="xd{{ e.pk }}" method="post" action="{% url 'extra_delete' order.pk e.pk %}">{% csrf_token %}</form>
+      {% empty %}
+        <p class="text-muted small">CM, washing, commercial, etc.</p>
+      {% endfor %}
+      <form method="post" action="{% url 'extra_add' order.pk line.pk %}" class="d-flex gap-1 mt-2">{% csrf_token %}
+        <input class="form-control form-control-sm" name="name" list="dl-cost-heads" placeholder="Cost head" required>
+        <input class="form-control form-control-sm text-end" name="cost_per_pc" type="number" step="any" placeholder="/pc" style="width:90px" required>
+        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i></button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% if all_costing|length > 1 %}
+<div class="erp-card mb-3">
+  <div class="p-3 border-bottom"><h2 class="card-title-sm mb-0">All styles</h2></div>
+  <div class="table-responsive">
+    <table class="table erp-table mb-0">
+      <thead><tr><th>Style</th><th class="text-end">Qty</th><th class="text-end">Material / pc</th><th class="text-end">Total cost / pc</th><th class="text-end">FOB / pc</th><th class="text-end">Margin / pc</th><th class="text-end">Order margin</th><th>Prices</th></tr></thead>
+      <tbody>
+      {% for c in all_costing %}
+        <tr>
+          <td><a href="?tab=costing&line={{ c.line.pk }}">{{ c.line.style }}</a></td>
+          <td class="text-end">{{ c.line.qty|num:0 }}</td>
+          <td class="text-end">{{ c.material_pc|num:4 }}</td>
+          <td class="text-end">{{ c.total_pc|num:4 }}</td>
+          <td class="text-end">{{ c.fob|num:4 }}</td>
+          <td class="text-end {% if c.margin_pc < 0 %}text-danger{% endif %}">{{ c.margin_pc|num:4 }}</td>
+          <td class="text-end">{{ c.margin_total|num:2 }}</td>
+          <td>{% if not c.row_count %}<span class="badge text-bg-secondary">No BOM</span>{% elif c.unpriced %}<span class="badge text-bg-warning">{{ c.unpriced }} missing</span>{% else %}<span class="badge text-bg-success">Complete</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% include "orders/tabs/_continue.html" with next_stage=6 next_key="po" next_label="Supplier PO" hint="Every material row of every style needs a price before supplier POs can be raised." %}

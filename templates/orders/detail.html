@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load orbit %}
+{% block title %}{{ order.po_number }} · Orbit ERP{% endblock %}
+{% block content %}
+<div class="erp-page-header">
+  <div>
+    <h1>{{ order.po_number }} <small class="text-muted fw-normal fs-6">{{ order.order_no }}</small>
+      <span class="badge status-{{ order.status }} align-middle fs-7">{{ order.get_status_display }}</span></h1>
+    <div class="order-meta">
+      <span><i class="bi bi-person-badge"></i> {{ order.buyer }}</span>
+      {% if order.factory %}<span><i class="bi bi-building"></i> {{ order.factory }}</span>{% endif %}
+      <span><i class="bi bi-box"></i> {{ order.total_qty|num:0 }} pcs</span>
+      <span><i class="bi bi-currency-dollar"></i> {{ order.total_amount|num:2 }} {{ order.currency }}</span>
+      {% if order.ship_date %}<span><span class="status-dot {{ order.ship_status }}"></span>Ship {{ order.ship_date|date:"d M Y" }}</span>{% endif %}
+    </div>
+  </div>
+  <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Orders</a>
+</div>
+
+<nav class="stepper mb-3">
+  {% for t in tabs %}
+    {% if t.unlocked %}
+      <a class="step {% if t.key == tab %}now{% elif t.done %}done{% endif %}" href="?tab={{ t.key }}{% if line %}&line={{ line.pk }}{% endif %}">
+        <b>{% if t.done and t.key != tab %}<i class="bi bi-check-lg"></i>{% else %}{{ t.num }}{% endif %}</b> {{ t.label }}
+      </a>
+    {% else %}
+      <span class="step locked" title="{% if t.admin_only and order.stage >= 5 %}Admin only{% else %}Complete the previous step first{% endif %}">
+        <b>{% if t.admin_only and order.stage >= 5 %}<i class="bi bi-shield-lock"></i>{% else %}<i class="bi bi-lock"></i>{% endif %}</b> {{ t.label }}
+      </span>
+    {% endif %}
+  {% endfor %}
+</nav>
+
+{% if tab == 'assortment' or tab == 'bom' or tab == 'costing' %}
+  {% if lines|length > 1 %}
+  <ul class="nav nav-pills erp-pills line-pills mb-3">
+    <li class="nav-item"><span class="nav-link disabled ps-0">Style:</span></li>
+    {% for ln in lines %}
+      <li class="nav-item"><a class="nav-link {% if ln == line %}active{% endif %}" href="?tab={{ tab }}&line={{ ln.pk }}">
+        {{ ln.style }}{% if tab == 'assortment' %} {% if ln.assortment_complete %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-exclamation-circle text-warning"></i>{% endif %}{% endif %}
+      </a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if not line %}<div class="alert alert-warning">This order has no line items yet.</div>{% endif %}
+{% endif %}
+
+{% if tab == 'order' %}{% include "orders/tabs/order.html" %}
+{% elif tab == 'lines' %}{% include "orders/tabs/lines.html" %}
+{% elif tab == 'assortment' and line %}{% include "orders/tabs/assortment.html" %}
+{% elif tab == 'bom' and line %}{% include "orders/tabs/bom.html" %}
+{% elif tab == 'costing' and line %}{% include "orders/tabs/costing.html" %}
+{% elif tab == 'po' %}{% include "orders/tabs/po.html" %}
+{% endif %}
+
+{% include "orders/_datalists.html" %}
+{% endblock %}

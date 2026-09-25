@@ -1,0 +1,65 @@
+{% load orbit %}
+<form method="post" action="{% url 'assortment_save' order.pk line.pk %}" id="assortForm">
+  {% csrf_token %}
+  <div class="erp-card p-4 mb-3">
+    <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+      <div>
+        <h2 class="card-title-sm mb-1">Color &amp; size breakdown — {{ line.style }}</h2>
+        <div class="text-muted small">{{ line.description }} · line qty <b>{{ line.qty|num:0 }}</b> pcs</div>
+      </div>
+      <div>
+        <div class="form-label mb-1">Size type <span class="text-danger">*</span></div>
+        <div class="btn-group" role="group">
+          {% for key, label in size_types %}
+            <input type="radio" class="btn-check" name="size_type" id="st-{{ key }}" value="{{ key }}" {% if line.size_type == key %}checked{% endif %} required>
+            <label class="btn btn-outline-primary btn-sm" for="st-{{ key }}">{{ label }}</label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered size-grid-table align-middle mb-2" id="assortTable"
+             data-letter="{{ size_sets.letter|join:',' }}" data-number="{{ size_sets.number|join:',' }}" data-line-qty="{{ line.qty }}">
+        <thead><tr>
+          <th style="min-width:170px">Color / Size</th>
+          {% for i in size_count %}<th class="text-center size-head">{{ line.sizes|at:i }}</th>{% endfor %}
+          <th class="text-end">Total</th><th></th>
+        </tr></thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td><input class="form-control form-control-sm" name="color-{{ forloop.counter0 }}" value="{{ row.color }}" list="dl-colors" placeholder="Color"></td>
+            {% with n=forloop.counter0 %}{% for q in row.cells %}
+              <td class="text-center"><input class="form-control form-control-sm size-grid-input text-end" type="number" min="0" name="q-{{ n }}-{{ forloop.counter0 }}" value="{% if q %}{{ q }}{% endif %}"></td>
+            {% endfor %}{% endwith %}
+            <td class="text-end row-total">0</td>
+            <td><button type="button" class="btn btn-sm btn-link text-danger remove-row" title="Remove color"><i class="bi bi-x-lg"></i></button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr>
+          <th>Total</th>
+          {% for i in size_count %}<th class="text-end col-total">0</th>{% endfor %}
+          <th class="text-end grand-total">0</th><th></th>
+        </tr></tfoot>
+      </table>
+    </div>
+    <template id="assortRowTpl">
+      <tr>
+        <td><input class="form-control form-control-sm" name="color-__N__" list="dl-colors" placeholder="Color"></td>
+        {% for i in size_count %}<td class="text-center"><input class="form-control form-control-sm size-grid-input text-end" type="number" min="0" name="q-__N__-{{ i }}"></td>{% endfor %}
+        <td class="text-end row-total">0</td>
+        <td><button type="button" class="btn btn-sm btn-link text-danger remove-row" title="Remove color"><i class="bi bi-x-lg"></i></button></td>
+      </tr>
+    </template>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="addColor"><i class="bi bi-plus-lg"></i> Add color</button>
+      <div id="assortCheck" class="small fw-semibold"></div>
+      <button class="btn btn-erp-primary"><i class="bi bi-save"></i> Save assortment</button>
+    </div>
+  </div>
+</form>
+
+{% include "orders/tabs/_continue.html" with next_stage=4 next_key="bom" next_label="BOM" hint="Every style needs a size type and a breakdown that adds up to its line qty." %}

@@ -1,0 +1,49 @@
+{% load orbit %}
+<div class="row g-3">
+  <div class="col-xl-8">
+    <div class="erp-card p-4">
+      <h2 class="card-title-sm">Order details</h2>
+      <form method="post" action="{% url 'order_update' order.pk %}">
+        {% csrf_token %}
+        <div class="row g-3">
+          {% include "orders/_field.html" with field=form.po_number %}
+          {% include "orders/_field.html" with field=form.buyer %}
+          {% include "orders/_field.html" with field=form.factory %}
+          {% include "orders/_field.html" with field=form.ship_date %}
+          {% include "orders/_field.html" with field=form.currency cls="col-md-2" %}
+          {% include "orders/_field.html" with field=form.status cls="col-md-2" %}
+          {% include "orders/_field.html" with field=form.remarks cls="col-12" %}
+        </div>
+        <div class="erp-form-actions mt-3 d-flex justify-content-between">
+          <button class="btn btn-erp-primary"><i class="bi bi-save"></i> Save order</button>
+          <a class="btn btn-outline-primary" href="?tab=lines">Line items <i class="bi bi-arrow-right"></i></a>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="col-xl-4">
+    <div class="erp-card p-4 mb-3">
+      <h2 class="card-title-sm">Line items</h2>
+      {% for ln in lines %}
+        <div class="d-flex justify-content-between border-bottom py-2">
+          <div><b>{{ ln.style }}</b><br><small class="text-muted">{{ ln.description }}</small></div>
+          <div class="text-end">{{ ln.qty|num:0 }} pcs<br><small class="text-muted">@ {{ ln.unit_price|num:2 }}</small></div>
+        </div>
+      {% empty %}
+        <p class="text-muted mb-0">No line items yet.</p>
+      {% endfor %}
+      {% if lines %}
+        <div class="d-flex justify-content-between pt-2 fw-bold"><span>Total</span><span>{{ order.total_qty|num:0 }} pcs · {{ order.total_amount|num:2 }}</span></div>
+      {% endif %}
+    </div>
+    <div class="erp-card p-3 small text-muted">
+      Created {{ order.created_at|date:"d M Y H:i" }}{% if order.created_by %} by {{ order.created_by }}{% endif %}<br>
+      Last updated {{ order.updated_at|date:"d M Y H:i" }}
+      {% if is_admin %}
+      <form method="post" action="{% url 'order_delete' order.pk %}" class="mt-2">{% csrf_token %}
+        <button class="btn btn-sm btn-outline-danger" data-confirm="Delete {{ order.po_number }} with all its lines, BOM, costing and supplier POs?"><i class="bi bi-trash"></i> Delete order</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>

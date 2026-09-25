@@ -1,0 +1,53 @@
+{% load orbit %}
+<div class="erp-card mb-3">
+  <div class="table-responsive">
+    <table class="table erp-table mb-0 align-middle">
+      <thead><tr>
+        <th style="width:40px">#</th><th>Style</th><th>Item / Description</th>
+        <th class="text-end" style="width:140px">Qty (pcs)</th><th class="text-end" style="width:140px">Price / pc</th>
+        <th class="text-end" style="width:140px">Amount</th><th style="width:110px"></th>
+      </tr></thead>
+      <tbody>
+      {% for ln, f in line_forms %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td><input class="form-control form-control-sm" name="{{ f.style.html_name }}" value="{{ f.style.value }}" form="lf{{ ln.pk }}" required></td>
+          <td><input class="form-control form-control-sm" name="{{ f.description.html_name }}" value="{{ f.description.value }}" form="lf{{ ln.pk }}"></td>
+          <td><input class="form-control form-control-sm text-end" type="number" min="0" name="{{ f.qty.html_name }}" value="{{ f.qty.value }}" form="lf{{ ln.pk }}" required></td>
+          <td><input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0" name="{{ f.unit_price.html_name }}" value="{{ ln.unit_price|plain }}" form="lf{{ ln.pk }}" required></td>
+          <td class="text-end fw-semibold">{{ ln.amount|num:2 }}</td>
+          <td class="text-end text-nowrap">
+            <button class="btn btn-sm btn-outline-primary" form="lf{{ ln.pk }}" title="Save"><i class="bi bi-save"></i></button>
+            <button class="btn btn-sm btn-outline-danger" form="ld{{ ln.pk }}" title="Delete" data-confirm="Delete line {{ ln.style }} with its assortment, BOM and costing?"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No line items yet — add the first style below.</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if lines %}
+      <tfoot><tr class="fw-bold"><td></td><td colspan="2">Total</td><td class="text-end">{{ order.total_qty|num:0 }}</td><td></td><td class="text-end">{{ order.total_amount|num:2 }}</td><td></td></tr></tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% for ln, f in line_forms %}
+  <form id="lf{{ ln.pk }}" method="post" action="{% url 'line_update' order.pk ln.pk %}">{% csrf_token %}</form>
+  <form id="ld{{ ln.pk }}" method="post" action="{% url 'line_delete' order.pk ln.pk %}">{% csrf_token %}</form>
+{% endfor %}
+
+<div class="erp-card p-4 mb-3">
+  <h2 class="card-title-sm"><i class="bi bi-plus-circle"></i> Add line item</h2>
+  <form method="post" action="{% url 'line_add' order.pk %}">
+    {% csrf_token %}
+    <div class="row g-3 align-items-end">
+      {% include "orders/_field.html" with field=new_line_form.style cls="col-md-3" %}
+      {% include "orders/_field.html" with field=new_line_form.description cls="col-md-4" %}
+      {% include "orders/_field.html" with field=new_line_form.qty cls="col-md-2" %}
+      {% include "orders/_field.html" with field=new_line_form.unit_price cls="col-md-2" %}
+      <div class="col-md-1"><button class="btn btn-erp-primary w-100"><i class="bi bi-plus-lg"></i> Add</button></div>
+    </div>
+  </form>
+</div>
+
+{% include "orders/tabs/_continue.html" with next_stage=3 next_key="assortment" next_label="Assortment" hint="Add every style on this buyer PO, then continue." %}
