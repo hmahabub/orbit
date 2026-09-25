@@ -7,7 +7,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('ORBIT_SECRET_KEY', 'django-insecure-orbit-dev-key-change-me-in-production')
 DEBUG = os.environ.get('ORBIT_DEBUG', '1') == '1'
-ALLOWED_HOSTS = os.environ.get('ORBIT_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.environ.get('ORBIT_ALLOWED_HOSTS', 'localhost,127.0.0.1,orbit.asgroupbd.com').split(',')
+# Forms posted from the live site over HTTPS pass Django's CSRF origin check.
+CSRF_TRUSTED_ORIGINS = ['https://orbit.asgroupbd.com']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
