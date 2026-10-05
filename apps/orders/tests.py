@@ -78,7 +78,7 @@ class WorkflowTests(TestCase):
         self.assertEqual(order.stage, Order.STAGE_ASSORTMENT)
 
     def add_material(self, line, **fields):
-        data = {'placement': '', 'supplier': '', 'unit': 'Pcs', 'allocation': 'all',
+        data = {'category': 'trims', 'placement': '', 'unit': 'Pcs', 'allocation': 'all',
                 'consumption': '1', 'color_combo': '', 'spec': '', **fields}
         self.client.post(reverse('bom_item_add', args=[line.order_id, line.pk]), data)
         return BOMItem.objects.get(line=line, name=fields['name'])
@@ -88,7 +88,7 @@ class WorkflowTests(TestCase):
         line = self.add_line_and_assortment(order)
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_BOM]))
         twill = self.add_material(line, name='Twill', allocation='color', consumption='1.478070', spec='58"',
-                                  supplier='Roundstone', unit='Yds')
+                                  category='fabric', unit='Yds')
         cord = self.add_material(line, name='Drawcord', allocation='size', color_combo='Black')
         self.add_material(line, name='Grommet', consumption='2')
 
@@ -104,7 +104,7 @@ class WorkflowTests(TestCase):
         # One save covers item cells and row cells; qty override; switching allocation rebuilds rows.
         self.client.post(reverse('bom_save', args=[order.pk, line.pk]), {
             f'i-{twill.pk}-name': 'Twill', f'i-{twill.pk}-allocation': 'color',
-            f'i-{twill.pk}-unit': 'Yds', f'i-{twill.pk}-supplier': 'Roundstone', f'i-{twill.pk}-placement': 'Body',
+            f'i-{twill.pk}-unit': 'Yds', f'i-{twill.pk}-category': 'fabric', f'i-{twill.pk}-placement': 'Body',
             f'i-{cord.pk}-name': 'Drawcord', f'i-{cord.pk}-allocation': 'all',
             f'r-{oyster.pk}-cons': '1.478070', f'r-{oyster.pk}-qty': '5000', f'r-{oyster.pk}-src': '',
             f'r-{oyster.pk}-combo': 'OYSTER', f'r-{oyster.pk}-spec': '58"'})
@@ -148,8 +148,11 @@ class WorkflowTests(TestCase):
         order = self.create_order()
         self.add_line_and_assortment(order)
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_BOM]))
-        self.add_material(order.lines.get(), name='Twill', supplier='Roundstone', unit='Yds', allocation='color',
-                          consumption='1.478070')
+        line = order.lines.get()
+        twill = self.add_material(line, name='Twill', category='fabric', unit='Yds', allocation='color',
+                                  consumption='1.478070')
+        zipper = self.add_material(line, name='Zipper', category='trims')
+        label = self.add_material(line, name='Care label', category='labels')
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_COSTING]))
         order.refresh_from_db()
         self.assertEqual(order.stage, Order.STAGE_COSTING)
@@ -170,14 +173,43 @@ class WorkflowTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.stage, Order.STAGE_PO)
 
-        self.client.post(reverse('po_generate', args=[order.pk]))
-        po = SupplierPO.objects.get()
-        self.assertEqual(po.supplier, 'Roundstone')
+        # Suppliers are chosen on the PO tab; one PO per supplier and material type.
+        assign = reverse('po_assign', args=[order.pk])
+        all_po_ids = lambda: list(SupplierPO.objects.values_list('pk', flat=True))  # noqa: E731
+        pending = lambda: [i.name for i in self.detail(order, 'po').context['pending']]  # noqa: E731
+        self.client.post(assign, {f's-{twill.pk}': 'Roundstone', f's-{zipper.pk}': 'Roundstone',
+                                  f's-{label.pk}': '', 'action': 'generate'})
+        self.assertEqual(sorted(SupplierPO.objects.values_list('supplier', 'material_type')),
+                         [('Roundstone', 'fabric'), ('Roundstone', 'trims')])
+        po = SupplierPO.objects.get(material_type='fabric')
+        trims_po = SupplierPO.objects.get(material_type='trims')
         self.assertEqual(po.lines.count(), 3)
         self.assertEqual(po.lines.get(color='OYSTER').qty, 7414)
-        # Second run has nothing left to order.
-        self.client.post(reverse('po_generate', args=[order.pk]))
-        self.assertEqual(SupplierPO.objects.count(), 1)
+        # The label had no supplier, so it is still waiting; a second run adds nothing.
+        self.assertEqual(pending(), ['Care label'])
+        self.client.post(assign, {'action': 'generate'})
+        self.assertEqual(SupplierPO.objects.count(), 2)
+
+        # Move one fabric line onto the trims PO -> it becomes a mixed PO.
+        steel = po.lines.get(color='STEEL')
+        self.client.post(reverse('po_move', args=[order.pk, po.pk]), {'line': [steel.pk], 'target': trims_po.pk})
+        trims_po.refresh_from_db()
+        self.assertEqual((trims_po.lines.count(), trims_po.material_type, trims_po.type_label), (2, '', 'Mixed'))
+        # Take a line off the PO altogether -> its material is pending again.
+        self.client.post(reverse('po_move', args=[order.pk, po.pk]),
+                         {'line': [po.lines.get(color='FERN CAMO').pk], 'target': 'pending'})
+        self.assertEqual(pending(), ['Twill', 'Care label'])
+        # Split a line into a new PO, then merge everything back into the oldest PO.
+        self.client.post(reverse('po_move', args=[order.pk, trims_po.pk]), {'line': [steel.pk], 'target': 'new'})
+        self.assertEqual(SupplierPO.objects.count(), 3)
+        self.client.post(reverse('po_merge', args=[order.pk]), {'po': all_po_ids()})
+        po = SupplierPO.objects.get()
+        self.assertEqual(po.lines.count(), 3)
+        # Different suppliers can't be merged.
+        self.client.post(assign, {f's-{label.pk}': 'Alif', f's-{twill.pk}': 'Roundstone', 'action': 'generate'})
+        before = SupplierPO.objects.count()
+        self.client.post(reverse('po_merge', args=[order.pk]), {'po': all_po_ids()})
+        self.assertEqual(SupplierPO.objects.count(), before)
 
         self.client.force_login(self.merch)
         html = self.client.get(reverse('po_print', args=[po.pk])).content.decode()
@@ -196,3 +228,38 @@ class WorkflowTests(TestCase):
         for name in ['home', 'po_list', 'order_create']:
             self.assertEqual(self.client.get(reverse(name)).status_code, 200)
         self.assertEqual(self.client.get(reverse('home'), {'status': 'all', 'q': 'TRAVIS'}).status_code, 200)
+
+    def test_reports_and_downloads(self):
+        import os
+        from io import BytesIO
+
+        from django.core.management import call_command
+        from openpyxl import load_workbook
+
+        from .reports import REPORTS
+        call_command('seed_demo', stdout=open(os.devnull, 'w'))
+
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get(reverse('report_list')).status_code, 200)
+        for key in REPORTS:
+            url = reverse('report_detail', args=[key])
+            self.assertEqual(self.client.get(url, {'status': 'running', 'buyer': 'N&I'}).status_code, 200, key)
+            self.assertIn('text/csv', self.client.get(url, {'download': 'csv'})['Content-Type'])
+            wb = load_workbook(BytesIO(self.client.get(url, {'download': 'xlsx'}).content))
+            self.assertGreater(wb.active.max_row, 4, key)
+
+        table = self.client.get(reverse('report_detail', args=['orders'])).context['table']
+        self.assertEqual(table.totals[-2:], [56160, Decimal('258336.00')])
+        # Ship-date filter narrows the selection.
+        table = self.client.get(reverse('report_detail', args=['orders']), {'ship_from': '2026-06-01'}).context['table']
+        self.assertEqual([row[1] for row in table.rows], ['WC6916'])
+
+        # Non-admins: no cost reports, no amount columns anywhere.
+        self.client.force_login(self.merch)
+        self.assertEqual(self.client.get(reverse('report_detail', args=['profitability'])).status_code, 403)
+        denied = self.client.get(reverse('report_detail', args=['material-cost']), {'download': 'xlsx'})
+        self.assertEqual(denied.status_code, 403)
+        for key in ['materials', 'suppliers', 'po-register']:
+            table = self.client.get(reverse('report_detail', args=[key])).context['table']
+            self.assertFalse([c.label for c in table.columns if 'mount' in c.label], key)
+        self.assertNotContains(self.client.get(reverse('report_list')), 'Costing &amp; margin')

@@ -1,0 +1,30 @@
+<form method="get" class="erp-card p-3 mb-3 report-filters">
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="f-status">Status</label>
+      <select class="form-select form-select-sm" id="f-status" name="status">
+        <option value="">All</option>
+        {% for key, label in status_choices %}<option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label" for="f-buyer">Buyer</label>
+      <select class="form-select form-select-sm" id="f-buyer" name="buyer">
+        <option value="">All buyers</option>
+        {% for b in buyers %}<option value="{{ b }}" {% if filters.buyer == b %}selected{% endif %}>{{ b }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="f-from">Ship date from</label>
+      <input class="form-control form-control-sm" type="date" id="f-from" name="ship_from" value="{{ filters.ship_from|date:'Y-m-d' }}">
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="f-to">Ship date to</label>
+      <input class="form-control form-control-sm" type="date" id="f-to" name="ship_to" value="{{ filters.ship_to|date:'Y-m-d' }}">
+    </div>
+    <div class="col-12 col-md-3 d-flex gap-1">
+      <button class="btn btn-sm btn-erp-primary"><i class="bi bi-funnel"></i> Apply</button>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ request.path }}">Clear</a>
+    </div>
+  </div>
+</form>

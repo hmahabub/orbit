@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Orbit ERP{% endblock %}
+{% block content %}
+<div class="erp-page-header">
+  <div>
+    <h1><i class="bi {{ icon }}"></i> {{ title }} {% if admin_only %}<span class="badge erp-badge-admin align-middle fs-7"><i class="bi bi-shield-lock"></i> Admin only</span>{% endif %}</h1>
+    <div class="order-meta">{{ about }}</div>
+  </div>
+  <div class="d-flex gap-1 no-print">
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'report_list' %}{% if query %}?{{ query }}{% endif %}"><i class="bi bi-arrow-left"></i> Reports</a>
+    <a class="btn btn-sm btn-erp-primary" href="?{% if query %}{{ query }}&{% endif %}download=xlsx"><i class="bi bi-file-earmark-excel"></i> Download Excel</a>
+    <a class="btn btn-sm btn-outline-primary" href="?{% if query %}{{ query }}&{% endif %}download=csv"><i class="bi bi-filetype-csv"></i> CSV</a>
+    <button class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+  </div>
+</div>
+
+<div class="no-print">{% include "orders/_report_filters.html" %}</div>
+
+{% if table.bars %}
+<div class="erp-card p-3 mb-3">
+  <h2 class="card-title-sm">{{ table.chart_label }}</h2>
+  <div class="bar-chart">
+    {% for label, value, pct, negative in table.bars %}
+      <div class="bar-label" title="{{ label }}">{{ label }}</div>
+      <div class="bar-track"><div class="bar-fill {% if negative %}neg{% endif %}" style="width: {{ pct|floatformat:1 }}%"></div></div>
+      <div class="bar-value">{{ value }}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="erp-card">
+  <div class="table-responsive">
+    <table class="table erp-table report-table mb-0">
+      <thead><tr>{% for col in table.columns %}<th class="{% if col.numeric %}text-end{% endif %}">{{ col.label }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for row in table.display_rows %}
+        <tr>{% for text, right in row %}<td class="{% if right %}text-end{% endif %}">{{ text }}</td>{% endfor %}</tr>
+      {% empty %}
+        <tr><td colspan="{{ table.columns|length }}" class="text-center text-muted py-5">Nothing to report for this selection.</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if table.display_totals %}
+      <tfoot><tr>{% for text, right in table.display_totals %}<th class="{% if right %}text-end{% endif %}">{{ text }}</th>{% endfor %}</tr></tfoot>
+      {% endif %}
+    </table>
+  </div>
+  <div class="px-3 py-2 border-top small text-muted">{{ table.rows|length }} row(s)</div>
+</div>
+{% endblock %}

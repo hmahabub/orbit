@@ -28,6 +28,13 @@
       });
     });
 
+    // "Tick all lines" in a supplier PO's header.
+    document.querySelectorAll('.check-all').forEach(function (box) {
+      box.addEventListener('change', function () {
+        box.closest('table').querySelectorAll('tbody input[name="line"]').forEach(function (c) { c.checked = box.checked; });
+      });
+    });
+
     initAssortment();
     initBom();
     initCosting();

@@ -1,6 +1,9 @@
+import os
 from decimal import Decimal, InvalidOperation
 
 from django import template
+from django.contrib.staticfiles import finders
+from django.templatetags.static import static
 
 register = template.Library()
 
@@ -45,3 +48,12 @@ def fixed(value, places=2):
         return ''
     rounded = round(Decimal(value), int(places))
     return format(rounded.normalize(), 'f') if rounded else '0'
+
+
+@register.simple_tag
+def asset(path):
+    """Static URL with the file's modified time as ?v=, so browsers pick up
+    a changed CSS/JS file straight after a deploy instead of a cached one."""
+    found = finders.find(path)
+    version = int(os.path.getmtime(found)) if found else 0
+    return f'{static(path)}?v={version}'

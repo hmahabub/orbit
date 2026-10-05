@@ -5,13 +5,17 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Max, Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from . import reports
 from .forms import BOMItemForm, CostExtraForm, OrderForm, OrderLineForm, SupplierPOForm
-from .models import SIZE_COUNT, ZERO, AssortmentRow, BOMItem, BOMRow, CostExtra, Order, OrderLine, SupplierPO
-from .services import generate_supplier_pos, line_costing, load_bom, unassigned_rows
+from .models import (
+    MATERIAL_TYPES, SIZE_COUNT, ZERO, AssortmentRow, BOMItem, BOMRow, CostExtra, Order, OrderLine, SupplierPO,
+)
+from .services import generate_supplier_pos, line_costing, load_bom, merge_pos, move_po_lines, pending_items
 
 # (key, label, stage that unlocks it, icon)
 TABS = [
@@ -191,6 +195,7 @@ def order_detail(request, pk):
         if tab == 'bom':
             ctx['new_item_form'] = BOMItemForm()
             ctx['allocations'] = BOMItem.ALLOCATION_CHOICES
+            ctx['material_types'] = MATERIAL_TYPES
             ctx['lines_without_bom'] = [ln for ln in lines if not ln.bom_items.exists()]
             ctx['can_continue'] = not ctx['lines_without_bom']
         else:
@@ -200,13 +205,8 @@ def order_detail(request, pk):
     elif tab == 'po':
         pos = list(order.supplier_pos.prefetch_related('lines'))
         ctx['pos'] = [(po, SupplierPOForm(instance=po, prefix=f'po{po.pk}')) for po in pos]
-        groups = unassigned_rows(order)
-        ctx['pending'] = [
-            {'supplier': s or '— no supplier —', 'has_supplier': bool(s), 'rows': rows,
-             'items': sorted({r.item.name for r in rows})}
-            for s, rows in groups.items()
-        ]
-        ctx['can_generate'] = any(g['has_supplier'] for g in ctx['pending'])
+        ctx['pending'] = pending_items(order)
+        ctx['all_pos'] = pos
 
     return render(request, 'orders/detail.html', ctx)
 
@@ -445,7 +445,8 @@ def bom_save(request, pk, line_id):
             item.name = post.get(key + 'name', '').strip() or item.name
             item.placement = post.get(key + 'placement', '').strip()
             item.unit = post.get(key + 'unit', '').strip()
-            item.supplier = post.get(key + 'supplier', '').strip()
+            if post.get(key + 'category') in dict(MATERIAL_TYPES):
+                item.category = post[key + 'category']
             if post.get(key + 'allocation') in allocations:
                 item.allocation = post[key + 'allocation']
             item.save()
@@ -519,15 +520,64 @@ def extra_delete(request, pk, extra_id):
 
 @login_required
 @require_POST
-def po_generate(request, pk):
+def po_assign(request, pk):
+    """Saves the supplier typed against each not-yet-ordered material, then
+    (when the Generate button was used) raises the POs."""
     order = get_object_or_404(Order, pk=pk)
     if order.stage < Order.STAGE_PO:
         raise PermissionDenied
+    for item in BOMItem.objects.filter(line__order=order):
+        field = f's-{item.pk}'
+        if field in request.POST:
+            supplier = request.POST[field].strip()
+            if supplier != item.supplier:
+                item.supplier = supplier
+                item.save(update_fields=['supplier'])
+    if request.POST.get('action') != 'generate':
+        messages.success(request, 'Suppliers saved.')
+        return redirect(order_url(order, 'po'))
     created = generate_supplier_pos(order)
     if created:
-        messages.success(request, f'{len(created)} supplier PO(s) created: ' + ', '.join(p.supplier for p in created))
+        messages.success(request, f'{len(created)} supplier PO(s) created: ' + ', '.join(
+            f'{po.supplier} ({po.type_label})' for po in created))
     else:
-        messages.info(request, 'Nothing to generate — every material with a supplier is already on a PO.')
+        messages.warning(request, 'Nothing generated — type a supplier against the materials first.')
+    return redirect(order_url(order, 'po'))
+
+
+@login_required
+@require_POST
+def po_move(request, pk, po_id):
+    po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
+    order, po_no = po.order, po.po_no
+    line_ids = [int(v) for v in request.POST.getlist('line') if v.isdigit()]
+    target = request.POST.get('target', '')
+    valid = target in ('new', 'pending') or (
+        target.isdigit() and int(target) != po.pk and order.supplier_pos.filter(pk=target).exists())
+    if not line_ids or not valid:
+        messages.error(request, 'Tick the lines to move and choose where they should go.')
+        return redirect(order_url(order, 'po'))
+    dest = move_po_lines(po, line_ids, target)
+    where = 'back to the not-ordered list' if dest is None else f'to {dest.po_no}'
+    messages.success(request, f'{len(line_ids)} line(s) moved from {po_no} {where}.')
+    return redirect(order_url(order, 'po'))
+
+
+@login_required
+@require_POST
+def po_merge(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    ids = [int(v) for v in request.POST.getlist('po') if v.isdigit()]
+    pos = list(order.supplier_pos.filter(pk__in=ids))
+    if len(pos) < 2:
+        messages.error(request, 'Tick at least two POs to merge.')
+    elif len({po.supplier.strip().lower() for po in pos}) > 1:
+        messages.error(request, 'Only POs of the same supplier can be merged — change the supplier under '
+                                'Details first if they should become one PO.')
+    else:
+        merged = [po.po_no for po in pos]
+        target = merge_pos(pos)
+        messages.success(request, f'{", ".join(merged)} merged into {target.po_no}.')
     return redirect(order_url(order, 'po'))
 
 
@@ -568,3 +618,62 @@ def po_delete(request, pk, po_id):
     po.delete()
     messages.success(request, f'{po_no} deleted — its materials can be generated again.')
     return redirect(order_url(po.order, 'po'))
+
+
+# --------------------------------------------------------------------------
+# reports
+# --------------------------------------------------------------------------
+
+def _report_filters(request):
+    filters = reports.read_filters(request.GET)
+    return filters, {
+        'filters': filters,
+        'query': request.GET.urlencode(),
+        'status_choices': Order.STATUS_CHOICES,
+        'buyers': distinct(Order.objects, 'buyer'),
+    }
+
+
+@login_required
+def report_list(request):
+    admin = is_admin(request.user)
+    filters, ctx = _report_filters(request)
+    orders = reports.filtered_orders(filters)
+    ctx.update({
+        'reports': [{'key': key, 'title': title, 'about': about, 'icon': icon, 'admin_only': admin_only}
+                    for key, (title, about, icon, admin_only, _) in reports.REPORTS.items() if admin or not admin_only],
+        'kpis': {
+            'orders': len(orders),
+            'qty': sum(o.total_qty for o in orders),
+            'value': sum((o.total_amount for o in orders), ZERO),
+            'pos': SupplierPO.objects.filter(order__in=orders).count(),
+        },
+    })
+    return render(request, 'orders/report_list.html', ctx)
+
+
+@login_required
+def report_detail(request, key):
+    if key not in reports.REPORTS:
+        raise Http404
+    title, about, icon, admin_only, _ = reports.REPORTS[key]
+    admin = is_admin(request.user)
+    if admin_only:
+        require_admin(request.user)
+    filters, ctx = _report_filters(request)
+    table = reports.build(key, filters, admin)
+
+    fmt = request.GET.get('download')
+    if fmt == 'csv':
+        return reports.as_csv(title, table)
+    if fmt == 'xlsx':
+        parts = [f'{label}: {value}' for label, value in [
+            ('Status', dict(Order.STATUS_CHOICES).get(filters['status'])), ('Buyer', filters['buyer']),
+            ('Ship from', filters['ship_from']), ('Ship to', filters['ship_to'])] if value]
+        return reports.as_xlsx(title, table, ' · '.join(parts) or 'All orders')
+
+    params = request.GET.copy()
+    params.pop('download', None)
+    ctx.update({'key': key, 'title': title, 'about': about, 'icon': icon, 'admin_only': admin_only,
+                'table': table, 'query': params.urlencode()})
+    return render(request, 'orders/report_detail.html', ctx)

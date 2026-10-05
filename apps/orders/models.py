@@ -23,6 +23,10 @@ SIZE_SETS = {
 }
 SIZE_COUNT = 8
 
+# What kind of material a BOM item is. Supplier POs are raised per type.
+MATERIAL_TYPES = [('fabric', 'Fabric'), ('trims', 'Trims'), ('labels', 'Labels'), ('packing', 'Packing'),
+                  ('other', 'Other')]
+
 
 # --------------------------------------------------------------------------
 # Orders
@@ -198,6 +202,7 @@ class BOMItem(models.Model):
     ]
 
     line = models.ForeignKey(OrderLine, related_name='bom_items', on_delete=models.CASCADE)
+    category = models.CharField('Type', max_length=10, choices=MATERIAL_TYPES, default='trims')
     name = models.CharField('Item', max_length=150)
     placement = models.CharField(max_length=100, blank=True)
     supplier = models.CharField(max_length=100, blank=True)
@@ -323,6 +328,7 @@ class SupplierPO(models.Model):
 
     order = models.ForeignKey(Order, related_name='supplier_pos', on_delete=models.CASCADE)
     supplier = models.CharField(max_length=100)
+    material_type = models.CharField('Type', max_length=10, choices=MATERIAL_TYPES, blank=True)  # '' = mixed
     po_date = models.DateField(default=timezone.localdate)
     delivery_date = models.DateField('Required delivery', null=True, blank=True)
     pi_no = models.CharField('PI no.', max_length=60, blank=True)
@@ -339,6 +345,10 @@ class SupplierPO(models.Model):
 
     def __str__(self):
         return f'{self.po_no} — {self.supplier}'
+
+    @property
+    def type_label(self):
+        return self.get_material_type_display() or 'Mixed'
 
     @property
     def po_no(self):

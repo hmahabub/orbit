@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load orbit %}
+{% block title %}Reports · Orbit ERP{% endblock %}
+{% block content %}
+<div class="erp-page-header">
+  <h1><i class="bi bi-bar-chart-line"></i> Reports</h1>
+</div>
+
+{% include "orders/_report_filters.html" %}
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="erp-card kpi-card"><div class="kpi-value">{{ kpis.orders }}</div><div class="kpi-label">Orders in selection</div></div></div>
+  <div class="col-6 col-lg-3"><div class="erp-card kpi-card"><div class="kpi-value">{{ kpis.qty|num:0 }}</div><div class="kpi-label">Pieces</div></div></div>
+  <div class="col-6 col-lg-3"><div class="erp-card kpi-card kpi-green"><div class="kpi-value">${{ kpis.value|num:0 }}</div><div class="kpi-label">Order value</div></div></div>
+  <div class="col-6 col-lg-3"><div class="erp-card kpi-card kpi-amber"><div class="kpi-value">{{ kpis.pos }}</div><div class="kpi-label">Supplier POs</div></div></div>
+</div>
+
+<div class="row g-3">
+  {% for r in reports %}
+  <div class="col-md-6 col-xl-3">
+    <div class="erp-card report-card h-100">
+      <a class="report-card-main" href="{% url 'report_detail' r.key %}{% if query %}?{{ query }}{% endif %}">
+        <i class="bi {{ r.icon }} report-icon"></i>
+        <div class="fw-bold">{{ r.title }} {% if r.admin_only %}<span class="badge erp-badge-admin"><i class="bi bi-shield-lock"></i> Admin</span>{% endif %}</div>
+        <div class="small text-muted">{{ r.about }}</div>
+      </a>
+      <div class="report-card-foot">
+        <a href="{% url 'report_detail' r.key %}?{% if query %}{{ query }}&{% endif %}download=xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+        <a href="{% url 'report_detail' r.key %}?{% if query %}{{ query }}&{% endif %}download=csv"><i class="bi bi-filetype-csv"></i> CSV</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -24,11 +24,15 @@ urlpatterns = [
     path('orders/<int:pk>/lines/<int:line_id>/costing/extra/', views.extra_add, name='extra_add'),
     path('orders/<int:pk>/costing/extra/<int:extra_id>/delete/', views.extra_delete, name='extra_delete'),
 
-    path('orders/<int:pk>/po/generate/', views.po_generate, name='po_generate'),
+    path('orders/<int:pk>/po/assign/', views.po_assign, name='po_assign'),
+    path('orders/<int:pk>/po/merge/', views.po_merge, name='po_merge'),
+    path('orders/<int:pk>/po/<int:po_id>/move/', views.po_move, name='po_move'),
     path('orders/<int:pk>/po/<int:po_id>/update/', views.po_update, name='po_update'),
     path('orders/<int:pk>/po/<int:po_id>/lines/', views.po_lines_save, name='po_lines_save'),
     path('orders/<int:pk>/po/<int:po_id>/delete/', views.po_delete, name='po_delete'),
 
     path('supplier-po/', views.po_list, name='po_list'),
+    path('reports/', views.report_list, name='report_list'),
+    path('reports/<slug:key>/', views.report_detail, name='report_detail'),
     path('supplier-po/<int:po_id>/print/', views.po_print, name='po_print'),
 ]

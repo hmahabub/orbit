@@ -59,6 +59,8 @@ BOM = [
     ('Scotch tape', '', 'Sunshine', 'Roll', 'all', '0', 'BLACK', '', '0.80'),
     ('Gum Tape', '', 'Sunshine', 'Roll', 'all', '0', '', '', '0.90'),
 ]
+# Material type by position in BOM: 3 fabrics, then trims, labels, packing.
+CATEGORY_UPTO = [('fabric', 3), ('trims', 13), ('labels', 20), ('packing', 99)]
 EXTRAS = [('CM', '0.55'), ('Washing', '0.18'), ('Commercial', '0.05')]
 
 ORDERS = [
@@ -108,8 +110,9 @@ class Command(BaseCommand):
             AssortmentRow.objects.create(line=line, color=color, position=pos, qtys=ASSORTMENT[color] + [0] * 4)
 
         for pos, (name, placement, supplier, unit, alloc, cons, combo, spec, price) in enumerate(BOM):
+            category = next(cat for cat, upto in CATEGORY_UPTO if pos < upto)
             item = BOMItem.objects.create(
-                line=line, name=name, placement=placement, supplier=supplier, unit=unit, allocation=alloc,
+                line=line, category=category, name=name, placement=placement, supplier=supplier, unit=unit, allocation=alloc,
                 consumption=Decimal(cons), color_combo=combo if isinstance(combo, str) else '',
                 spec=spec if isinstance(spec, str) else '', position=pos,
             )

@@ -9,9 +9,9 @@
       <div class="table-responsive">
         <table class="table sheet mb-0" id="costTable">
           <thead><tr>
-            <th class="c-sl">Sl</th><th class="c-item">Item</th><th>Body color</th><th>Color combination</th><th>Size / spec</th>
+            <th class="c-sl">Sl</th><th>Type</th><th class="c-item">Item</th><th>Body color</th><th>Color combination</th><th>Size / spec</th>
             <th class="text-end">Order qty</th><th class="text-end">Total req.</th><th>Unit</th>
-            <th class="c-price text-end">Price</th><th class="text-end">TTL amount</th><th>Supplier</th>
+            <th class="c-price text-end">Price</th><th class="text-end">TTL amount</th>
           </tr></thead>
           <tbody>
           {% for item in items %}
@@ -20,6 +20,7 @@
             <tr class="price-row {% if forloop.first %}item-first{% endif %}" data-req="{{ row.requirement|plain }}">
               {% if forloop.first %}
               <td rowspan="{{ n }}" class="c-sl text-center text-muted">{{ forloop.parentloop.counter }}</td>
+              <td rowspan="{{ n }}" class="ro">{{ item.get_category_display }}</td>
               <td rowspan="{{ n }}" class="ro item-name">
                 {{ item.name }}
                 {% if n > 1 %}
@@ -38,7 +39,6 @@
               {% if forloop.first %}<td rowspan="{{ n }}" class="ro">{{ item.unit }}</td>{% endif %}
               <td><input class="text-end js-price {% if row.price is None %}is-missing{% endif %}" type="number" step="any" min="0" name="r-{{ row.pk }}-price" value="{{ row.price|plain }}" form="priceForm" data-item="{{ item.pk }}"></td>
               <td class="ro text-end fw-semibold js-amount">{{ row.amount|num:2 }}</td>
-              {% if forloop.first %}<td rowspan="{{ n }}" class="ro">{{ item.supplier }}</td>{% endif %}
             </tr>
             {% endfor %}
             {% endwith %}
@@ -47,8 +47,8 @@
           {% endfor %}
           </tbody>
           <tfoot><tr class="fw-bold">
-            <td colspan="9" class="text-end">Total material cost</td>
-            <td class="text-end" id="materialTotal">{{ costing.material_total|num:2 }}</td><td></td>
+            <td colspan="10" class="text-end">Total material cost</td>
+            <td class="text-end" id="materialTotal">{{ costing.material_total|num:2 }}</td>
           </tr></tfoot>
         </table>
       </div>

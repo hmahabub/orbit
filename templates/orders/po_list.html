@@ -12,12 +12,13 @@
 <div class="erp-card">
   <div class="table-responsive">
     <table class="table erp-table mb-0">
-      <thead><tr><th>PO no.</th><th>Supplier</th><th>Buyer PO</th><th>PO date</th><th>Delivery</th><th>PI</th><th>LC</th><th>ETD</th><th>ETA</th><th class="text-end">Lines</th>{% if is_admin %}<th class="text-end">Amount</th>{% endif %}<th>Status</th><th></th></tr></thead>
+      <thead><tr><th>PO no.</th><th>Supplier</th><th>Type</th><th>Buyer PO</th><th>PO date</th><th>Delivery</th><th>PI</th><th>LC</th><th>ETD</th><th>ETA</th><th class="text-end">Lines</th>{% if is_admin %}<th class="text-end">Amount</th>{% endif %}<th>Status</th><th></th></tr></thead>
       <tbody>
       {% for po in pos %}
         <tr>
           <td class="fw-semibold"><a href="{% url 'order_detail' po.order.pk %}?tab=po">{{ po.po_no }}</a></td>
           <td>{{ po.supplier }}</td>
+          <td>{{ po.type_label }}</td>
           <td><a href="{% url 'order_detail' po.order.pk %}">{{ po.order.po_number }}</a></td>
           <td>{{ po.po_date|date:"d M Y" }}</td>
           <td>{{ po.delivery_date|date:"d M Y"|default:"—" }}</td>
@@ -31,7 +32,7 @@
           <td><a class="btn btn-sm btn-outline-secondary" href="{% url 'po_print' po.pk %}" target="_blank" title="Print"><i class="bi bi-printer"></i></a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="13" class="text-center text-muted py-5">No supplier POs yet. They are generated from an order's Supplier PO tab.</td></tr>
+        <tr><td colspan="14" class="text-center text-muted py-5">No supplier POs yet. They are generated from an order's Supplier PO tab.</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -13,9 +13,9 @@ The six steps are tabs on one order page. Each tab unlocks when the one before i
 | **1. Order** | Buyer PO, buyer, factory, ship date, status | Created |
 | **2. Line Items** | Styles on the PO: style, description, qty, price/pc | At least one line exists |
 | **3. Assortment** | Color × size breakdown per style. Pick **letter sizes** (S, M, L, XL, XXL, 3XL, 4XL, 5XL) or **number sizes** (30–44) | Every style's breakdown adds up to its line qty |
-| **4. BOM** | Excel-style sheet per style: item, placement, color, size, consumption/pc ⇄ total req., supplier. **No prices** | Every style has materials |
+| **4. BOM** | Excel-style sheet per style: type, item, placement, color, size, consumption/pc ⇄ total req. **No prices, no suppliers** | Every style has materials |
 | **5. Costing** | **Admin only.** Price per BOM row, CM/other costs, cost/pc vs FOB, margin per style | Every BOM row has a price |
-| **6. Supplier PO** | One PO per supplier generated from the BOM. PI/LC/ETD/ETA, printable PO | — |
+| **6. Supplier PO** | Choose a supplier per material, then generate one PO per supplier and material type. Move lines between POs, merge POs, PI/LC/ETD/ETA, printable PO | — |
 
 After login, users land on the list of **running orders**.
 
@@ -49,6 +49,31 @@ Consumption is always **per piece**, so **Total req. = order qty × Cons./pc**. 
 
 Costing is also one sheet per style, with a price per row, other costs per piece (CM, washing…) and that style's margin. A table underneath compares all styles.
 
+## Supplier POs
+
+Every BOM material has a **Type**: Fabric, Trims, Labels, Packing or Other. Suppliers are not part of the BOM. They are chosen on the Supplier PO tab:
+
+1. **Choose suppliers.** The top of the tab lists every material not on a PO yet. Type a supplier against each one.
+2. **Generate.** One PO is raised per supplier *and* type, so a supplier giving both fabric and trims gets two POs. Materials left without a supplier stay in the list.
+3. **Adjust.** Tick lines inside a PO and move them to another PO, to a new PO, or back to "not ordered". Tick two or more POs of the same supplier and merge them into one. A PO holding more than one type shows as **Mixed**. The supplier, type, dates, PI and LC of a PO are edited under **Details**.
+
+## Reports
+
+The **Reports** menu has eight reports. All share one filter bar (status, buyer, ship-date range), and each downloads as Excel or CSV with the filter applied.
+
+| Report | Shows |
+|---|---|
+| Order register | Every order: qty, value, ship date, status, progress |
+| Buyer summary | Orders, pieces and value per buyer |
+| Shipment plan | Orders, pieces and value per ship month, and what is overdue |
+| Material requirement | Every BOM material: requirement, supplier, PO status |
+| Supplier summary | POs per supplier: count, types, open vs received |
+| Supplier PO register | Every PO with PI, LC, ETD, ETA and status |
+| Costing & margin *(admin)* | Cost per piece against FOB and margin per style |
+| Material cost by type *(admin)* | Spend on fabric, trims, labels and packing per order |
+
+Non-admins do not see the two admin reports, and amount columns are left out of the others, on screen and in downloads.
+
 ## Run it
 
 ```bash
@@ -80,7 +105,8 @@ Tests: `python manage.py test apps.orders`
 config/                 settings, urls
 apps/orders/
   models.py             Order, OrderLine, AssortmentRow, BOMItem/BOMRow, CostExtra, SupplierPO/Line
-  services.py           BOM loading, costing summary, supplier PO generation
+  services.py           BOM loading, costing summary, supplier PO generation, move and merge
+  reports.py            the reports and their Excel/CSV downloads
   views.py              order workspace (one view per tab action)
   management/commands/seed_demo.py
 templates/orders/       home, order workspace (tabs/*.html), PO list, printable PO
