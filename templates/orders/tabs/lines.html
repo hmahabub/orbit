@@ -32,7 +32,7 @@
   </div>
 </div>
 {% for ln, f in line_forms %}
-  <form id="lf{{ ln.pk }}" method="post" action="{% url 'line_update' order.pk ln.pk %}">{% csrf_token %}</form>
+  <form id="lf{{ ln.pk }}" data-save-label="Save line {{ ln.style }}" method="post" action="{% url 'line_update' order.pk ln.pk %}">{% csrf_token %}</form>
   <form id="ld{{ ln.pk }}" method="post" action="{% url 'line_delete' order.pk ln.pk %}">{% csrf_token %}</form>
 {% endfor %}
 

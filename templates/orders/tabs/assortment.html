@@ -1,5 +1,5 @@
 {% load orbit %}
-<form method="post" action="{% url 'assortment_save' order.pk line.pk %}" id="assortForm">
+<form method="post" action="{% url 'assortment_save' order.pk line.pk %}" id="assortForm" data-save-label="Save assortment">
   {% csrf_token %}
   <div class="erp-card p-4 mb-3">
     <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">

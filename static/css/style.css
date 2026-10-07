@@ -216,3 +216,21 @@ tr.clickable { cursor: pointer; }
 .bar-fill { background: var(--erp-teal); border-radius: .25rem; height: 100%; min-width: 2px; }
 .bar-fill.neg { background: var(--erp-red); }
 .bar-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ---------- Unsaved changes bar ---------- */
+.unsaved-bar {
+  position: fixed; left: 50%; bottom: 1rem; transform: translate(-50%, 150%); z-index: 1050;
+  display: flex; align-items: center; gap: .6rem; max-width: calc(100vw - 2rem);
+  background: var(--erp-navy); color: #fff; padding: .55rem .7rem .55rem 1rem; border-radius: .6rem;
+  box-shadow: 0 8px 24px rgba(10,24,48,.35); transition: transform .2s ease; font-size: .9rem;
+}
+.unsaved-bar.show { transform: translate(-50%, 0); }
+.unsaved-bar .unsaved-text { margin-right: .4rem; }
+.unsaved-bar .unsaved-text i { color: var(--erp-amber); }
+.unsaved-bar .unsaved-save { font-weight: 700; white-space: nowrap; }
+body.has-unsaved main { padding-bottom: 5rem !important; }
+.btn-unsaved, .btn-unsaved:hover, .btn-unsaved:focus {
+  background-color: var(--erp-amber) !important; border-color: var(--erp-amber) !important; color: var(--erp-navy) !important;
+  box-shadow: 0 0 0 .2rem rgba(232,163,61,.35);
+}
+@media (prefers-reduced-motion: reduce) { .unsaved-bar { transition: none; } }

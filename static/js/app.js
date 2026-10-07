@@ -35,10 +35,76 @@
       });
     });
 
+    initUnsaved();
     initAssortment();
     initBom();
     initCosting();
   });
+
+  // ---- Unsaved changes ---------------------------------------------------
+  // Forms marked data-save-label get a bar fixed to the bottom of the screen
+  // as soon as one of their fields changes, so the Save button is always in
+  // view however far the sheet has been scrolled. Leaving the page with
+  // unsaved edits asks first.
+  var markDirty = function () {};
+
+  function initUnsaved() {
+    var bar = document.createElement('div');
+    bar.className = 'unsaved-bar no-print';
+    bar.innerHTML = '<span class="unsaved-text"><i class="bi bi-exclamation-circle-fill"></i> <span></span></span>'
+      + '<button type="button" class="btn btn-sm btn-light unsaved-discard">Discard</button>'
+      + '<button type="button" class="btn btn-sm btn-warning unsaved-save"><i class="bi bi-save"></i> <span></span></button>';
+    document.body.appendChild(bar);
+    var dirty = [];      // forms with unsaved edits, most recent last
+    var leaving = false;
+
+    function saveButtons(form) {
+      // The form's own Save buttons, wherever they sit on the page (not Generate etc.).
+      var all = Array.prototype.slice.call(form.querySelectorAll('button'));
+      if (form.id) all = all.concat(Array.prototype.slice.call(document.querySelectorAll('button[form="' + form.id + '"]')));
+      return all.filter(function (b) { return b.type === 'submit' && (!b.value || b.value === 'save') && !b.dataset.confirm; });
+    }
+
+    function render() {
+      var form = dirty[dirty.length - 1];
+      bar.classList.toggle('show', !!form);
+      document.body.classList.toggle('has-unsaved', !!form);
+      if (!form) return;
+      var others = dirty.length - 1;
+      bar.querySelector('.unsaved-text span').textContent = 'You have unsaved changes'
+        + (others ? ' (and in ' + others + ' other place' + (others > 1 ? 's' : '') + ' — save each one)' : '');
+      bar.querySelector('.unsaved-save span').textContent = form.dataset.saveLabel;
+    }
+
+    markDirty = function (form) {
+      if (!form || !form.dataset.saveLabel) return;
+      var i = dirty.indexOf(form);
+      if (i > -1) dirty.splice(i, 1);
+      dirty.push(form);
+      saveButtons(form).forEach(function (b) { b.classList.add('btn-unsaved'); });
+      render();
+    };
+
+    function onEdit(e) {
+      var el = e.target;
+      if (el.form && !el.closest('.modal') && !el.classList.contains('set-all-price')) markDirty(el.form);
+    }
+    document.addEventListener('input', onEdit);
+    document.addEventListener('change', onEdit);
+
+    bar.querySelector('.unsaved-save').addEventListener('click', function () {
+      var form = dirty[dirty.length - 1];
+      var btn = saveButtons(form)[0];
+      if (form.requestSubmit) form.requestSubmit(btn); else form.submit();
+    });
+    bar.querySelector('.unsaved-discard').addEventListener('click', function () {
+      if (confirm('Discard your unsaved changes?')) { leaving = true; window.location.reload(); }
+    });
+    document.addEventListener('submit', function () { leaving = true; });
+    window.addEventListener('beforeunload', function (e) {
+      if (dirty.length && !leaving) { e.preventDefault(); e.returnValue = ''; }
+    });
+  }
 
   // ---- Assortment grid ---------------------------------------------------
   function initAssortment() {
@@ -83,7 +149,11 @@
     if (!tbody.rows.length) { addRow(); addRow(); addRow(); }
     document.getElementById('addColor').addEventListener('click', function () { addRow().querySelector('input').focus(); });
     tbody.addEventListener('click', function (e) {
-      if (e.target.closest('.remove-row')) { e.target.closest('tr').remove(); recalc(); }
+      if (e.target.closest('.remove-row')) {
+        e.target.closest('tr').remove();
+        recalc();
+        markDirty(document.getElementById('assortForm'));
+      }
     });
     table.addEventListener('input', recalc);
     document.querySelectorAll('input[name="size_type"]').forEach(function (r) { r.addEventListener('change', relabel); });
@@ -160,6 +230,7 @@
       var itemId = tr.querySelector('.js-price').dataset.item;
       table.querySelectorAll('.js-price[data-item="' + itemId + '"]').forEach(function (inp) { inp.value = value; });
       recalc();
+      markDirty(document.getElementById('priceForm'));
     });
   }
 })();

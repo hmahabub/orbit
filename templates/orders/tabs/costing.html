@@ -56,7 +56,7 @@
         </table>
       </div>
     </div>
-    <form id="priceForm" method="post" action="{% url 'costing_save' order.pk line.pk %}">{% csrf_token %}</form>
+    <form id="priceForm" data-save-label="Save prices" method="post" action="{% url 'costing_save' order.pk line.pk %}">{% csrf_token %}</form>
   </div>
 
   <div class="col-xxl-3">

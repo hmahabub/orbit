@@ -36,7 +36,7 @@
     </table>
   </div>
 </div>
-<form id="assignForm" method="post" action="{% url 'po_assign' order.pk %}">{% csrf_token %}</form>
+<form id="assignForm" data-save-label="Save suppliers" method="post" action="{% url 'po_assign' order.pk %}">{% csrf_token %}</form>
 {% elif not pos %}
 <div class="alert alert-info">No BOM materials to order.</div>
 {% endif %}
@@ -113,7 +113,7 @@
     </table>
   </div>
 </div>
-<form id="pol{{ po.pk }}" method="post" action="{% url 'po_lines_save' order.pk po.pk %}">{% csrf_token %}</form>
+<form id="pol{{ po.pk }}" data-save-label="Save {{ po.po_no }} quantities" method="post" action="{% url 'po_lines_save' order.pk po.pk %}">{% csrf_token %}</form>
 <form id="pom{{ po.pk }}" method="post" action="{% url 'po_move' order.pk po.pk %}">{% csrf_token %}</form>
 <form id="pod{{ po.pk }}" method="post" action="{% url 'po_delete' order.pk po.pk %}">{% csrf_token %}</form>
 

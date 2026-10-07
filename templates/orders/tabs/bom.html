@@ -86,7 +86,7 @@
   </div>
 </div>
 
-<form id="bomForm" method="post" action="{% url 'bom_save' order.pk line.pk %}">{% csrf_token %}</form>
+<form id="bomForm" data-save-label="Save BOM" method="post" action="{% url 'bom_save' order.pk line.pk %}">{% csrf_token %}</form>
 <form id="addForm" method="post" action="{% url 'bom_item_add' order.pk line.pk %}">{% csrf_token %}</form>
 {% for item in items %}
 <form id="del{{ item.pk }}" method="post" action="{% url 'bom_item_delete' order.pk item.pk %}">{% csrf_token %}</form>
