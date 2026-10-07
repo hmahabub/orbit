@@ -25,8 +25,9 @@ Buyer, factory, supplier and material names are typed in directly. There are no 
 
 An **admin** is a user with *staff status* (set in Django admin → Users). Only admins can:
 
-- open the Costing tab and enter prices
-- see prices and amounts on supplier POs, on screen and printed
+- open the Costing tab, enter prices and print the cost sheet
+- open the Supplier PO tab and the Supplier PO list, and print POs
+- open the supplier and costing reports
 - complete the Costing step
 - delete orders
 
@@ -51,11 +52,13 @@ Costing is also one sheet per style, with a price per row, other costs per piece
 
 ## Supplier POs
 
-Every BOM material has a **Type**: Fabric, Trims, Labels, Packing or Other. Suppliers are not part of the BOM. They are chosen on the Supplier PO tab:
+Every BOM material has a **Type**: Fabric, Lining, Inter-lining, Pocketing, Trims, Accessories, Labels, Packing or Other. Suppliers are not part of the BOM. They are chosen on the Supplier PO tab:
 
 1. **Choose suppliers.** The top of the tab lists every material not on a PO yet. Type a supplier against each one.
 2. **Generate.** One PO is raised per supplier *and* type, so a supplier giving both fabric and trims gets two POs. Materials left without a supplier stay in the list.
 3. **Adjust.** Tick lines inside a PO and move them to another PO, to a new PO, or back to "not ordered". Tick two or more POs of the same supplier and merge them into one. A PO holding more than one type shows as **Mixed**. The supplier, type, dates, PI and LC of a PO are edited under **Details**.
+
+PO numbers read **SPO-YY-xxxxx**: the year the PO was raised, then its running number. The printed PO shows each line's placement, body color, color combination, size and spec from the BOM, and the name of the user who raised it under *Prepared by*.
 
 ## Reports
 
@@ -66,13 +69,13 @@ The **Reports** menu has eight reports. All share one filter bar (status, buyer,
 | Order register | Every order: qty, value, ship date, status, progress |
 | Buyer summary | Orders, pieces and value per buyer |
 | Shipment plan | Orders, pieces and value per ship month, and what is overdue |
-| Material requirement | Every BOM material: requirement, supplier, PO status |
-| Supplier summary | POs per supplier: count, types, open vs received |
-| Supplier PO register | Every PO with PI, LC, ETD, ETA and status |
+| Material requirement | Every BOM material: type and requirement (supplier and PO status for admins) |
+| Supplier summary *(admin)* | POs per supplier: count, types, open vs received |
+| Supplier PO register *(admin)* | Every PO with PI, LC, ETD, ETA and status |
 | Costing & margin *(admin)* | Cost per piece against FOB and margin per style |
 | Material cost by type *(admin)* | Spend on fabric, trims, labels and packing per order |
 
-Non-admins do not see the two admin reports, and amount columns are left out of the others, on screen and in downloads.
+Non-admins do not see the four admin reports, and supplier and amount columns are left out of the others, on screen and in downloads.
 
 ## Run it
 

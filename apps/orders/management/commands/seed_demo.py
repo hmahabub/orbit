@@ -59,8 +59,8 @@ BOM = [
     ('Scotch tape', '', 'Sunshine', 'Roll', 'all', '0', 'BLACK', '', '0.80'),
     ('Gum Tape', '', 'Sunshine', 'Roll', 'all', '0', '', '', '0.90'),
 ]
-# Material type by position in BOM: 3 fabrics, then trims, labels, packing.
-CATEGORY_UPTO = [('fabric', 3), ('trims', 13), ('labels', 20), ('packing', 99)]
+# Material type by position in BOM: fabric, pocketing, inter-lining, then trims, labels, packing.
+CATEGORY_UPTO = [('fabric', 1), ('pocketing', 2), ('interlining', 3), ('trims', 13), ('labels', 20), ('packing', 99)]
 EXTRAS = [('CM', '0.55'), ('Washing', '0.18'), ('Commercial', '0.05')]
 
 ORDERS = [
@@ -130,7 +130,7 @@ class Command(BaseCommand):
         order.stage = Order.STAGE_PO
         order.save()
 
-        generate_supplier_pos(order)
+        generate_supplier_pos(order, order.created_by)
         SupplierPO.objects.filter(order=order, supplier='Roundstone').update(
             status='issued', pi_no='RS-PI-2611', etd=datetime.date(2026, 11, 20), eta=datetime.date(2026, 11, 28))
 

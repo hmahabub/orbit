@@ -150,7 +150,7 @@ class WorkflowTests(TestCase):
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_BOM]))
         line = order.lines.get()
         twill = self.add_material(line, name='Twill', category='fabric', unit='Yds', allocation='color',
-                                  consumption='1.478070')
+                                  consumption='1.478070', spec='58"', placement='Main body')
         zipper = self.add_material(line, name='Zipper', category='trims')
         label = self.add_material(line, name='Care label', category='labels')
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_COSTING]))
@@ -211,10 +211,27 @@ class WorkflowTests(TestCase):
         self.client.post(reverse('po_merge', args=[order.pk]), {'po': all_po_ids()})
         self.assertEqual(SupplierPO.objects.count(), before)
 
-        self.client.force_login(self.merch)
+        # PO number is SPO-YY-xxxxx; the print carries BOM detail and who prepared it.
+        po = SupplierPO.objects.filter(supplier='Roundstone').first()
+        self.assertRegex(po.po_no, r'^SPO-\d{2}-\d{5}$')
+        self.assertEqual(po.created_by, self.admin)
         html = self.client.get(reverse('po_print', args=[po.pk])).content.decode()
-        self.assertNotIn('1.8500', html)
-        self.assertIn('Roundstone', html)
+        for text in [po.po_no, 'Main body', 'FERN CAMO', '58&quot;', 'boss']:
+            self.assertIn(text, html)
+        self.assertContains(self.client.get(reverse('costing_print', args=[order.pk, line.pk])), 'Cost Sheet')
+
+        # Supplier POs are admin-only, like costing.
+        self.client.force_login(self.merch)
+        self.assertEqual(self.detail(order, 'po').context['tab'], 'bom')
+        self.assertNotContains(self.client.get(reverse('home')), reverse('po_list'))
+        for url in [reverse('po_list'), reverse('po_print', args=[po.pk]),
+                    reverse('costing_print', args=[order.pk, line.pk])]:
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+        for name, args in [('po_assign', [order.pk]), ('po_merge', [order.pk]), ('po_move', [order.pk, po.pk]),
+                           ('po_update', [order.pk, po.pk]), ('po_lines_save', [order.pk, po.pk]),
+                           ('po_delete', [order.pk, po.pk])]:
+            self.assertEqual(self.client.post(reverse(name, args=args)).status_code, 403, name)
+        self.assertTrue(SupplierPO.objects.filter(pk=po.pk).exists())
 
     def test_pages_render(self):
         from django.core.management import call_command
@@ -259,7 +276,8 @@ class WorkflowTests(TestCase):
         self.assertEqual(self.client.get(reverse('report_detail', args=['profitability'])).status_code, 403)
         denied = self.client.get(reverse('report_detail', args=['material-cost']), {'download': 'xlsx'})
         self.assertEqual(denied.status_code, 403)
-        for key in ['materials', 'suppliers', 'po-register']:
-            table = self.client.get(reverse('report_detail', args=[key])).context['table']
-            self.assertFalse([c.label for c in table.columns if 'mount' in c.label], key)
+        for key in ['suppliers', 'po-register']:
+            self.assertEqual(self.client.get(reverse('report_detail', args=[key])).status_code, 403, key)
+        table = self.client.get(reverse('report_detail', args=['materials'])).context['table']
+        self.assertFalse({'Amount', 'Supplier', 'PO status'} & {c.label for c in table.columns})
         self.assertNotContains(self.client.get(reverse('report_list')), 'Costing &amp; margin')

@@ -1,0 +1,113 @@
+{% load orbit %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cost sheet · {{ order.po_number }} · {{ line.style }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{% asset 'css/style.css' %}" rel="stylesheet">
+  <style>@page { size: A4 landscape; margin: 10mm; }</style>
+</head>
+<body class="print-body">
+<div class="print-sheet wide">
+  <div class="no-print text-end mb-3">
+    <button class="btn btn-erp-primary btn-sm" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+  <div class="print-head">
+    <div>
+      <div class="print-brand">OR<span>BIT</span></div>
+      <div class="small">Cost Sheet</div>
+    </div>
+    <div class="text-end">
+      <div class="print-po-no">{{ order.po_number }}</div>
+      <div class="small">{{ order.order_no }} · printed {{ printed_on|date:"d M Y" }}</div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-2">
+    <div class="col-7">
+      <table class="table table-sm table-bordered print-info mb-0">
+        <tr><th>Buyer</th><td>{{ order.buyer }}</td><th>Factory</th><td>{{ order.factory|default:"—" }}</td></tr>
+        <tr><th>Style</th><td>{{ line.style }}</td><th>Item</th><td>{{ line.description|default:"—" }}</td></tr>
+        <tr><th>Order qty</th><td>{{ line.qty|num:0 }} pcs</td><th>Ship date</th><td>{{ order.ship_date|date:"d M Y"|default:"—" }}</td></tr>
+        <tr><th>FOB / pc</th><td>{{ line.unit_price|num:4 }} {{ order.currency }}</td><th>Order value</th><td>{{ line.amount|num:2 }} {{ order.currency }}</td></tr>
+      </table>
+    </div>
+    <div class="col-5">
+      <table class="table table-sm table-bordered text-end mb-0 print-assort">
+        <thead><tr><th class="text-start">Color</th>{% for s in size_labels %}<th>{{ s }}</th>{% endfor %}<th>Total</th></tr></thead>
+        <tbody>
+          {% for color, qtys, total in assortment %}
+          <tr><td class="text-start">{{ color }}</td>{% for q in qtys %}<td>{{ q|num:0 }}</td>{% endfor %}<td class="fw-bold">{{ total|num:0 }}</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr class="fw-bold"><td class="text-start">Total</td>{% for t in size_totals %}<td>{{ t|num:0 }}</td>{% endfor %}<td>{{ line.assortment_total|num:0 }}</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <table class="table table-sm table-bordered align-middle print-lines">
+    <thead class="table-dark"><tr>
+      <th>Sl</th><th>Type</th><th>Item</th><th>Placement</th><th>Body color</th><th>Color combination</th><th>Size / spec</th>
+      <th class="text-end">Order qty</th><th class="text-end">Cons. / pc</th><th class="text-end">Total req.</th><th>Unit</th>
+      <th class="text-end">Price</th><th class="text-end">TTL amount</th>
+    </tr></thead>
+    <tbody>
+    {% for item in items %}
+      {% with n=item.row_list|length %}
+      {% for row in item.row_list %}
+      <tr>
+        {% if forloop.first %}
+        <td rowspan="{{ n }}">{{ forloop.parentloop.counter }}</td>
+        <td rowspan="{{ n }}">{{ item.get_category_display }}</td>
+        <td rowspan="{{ n }}">{{ item.name }}</td>
+        <td rowspan="{{ n }}">{{ item.placement }}</td>
+        {% endif %}
+        <td>{{ row.body_label }}</td>
+        <td>{{ row.color_combo }}</td>
+        <td>{% if row.size_label and row.size_label != row.spec %}{{ row.size_label }}{% if row.spec %} · {% endif %}{% endif %}{{ row.spec }}</td>
+        <td class="text-end">{{ row.order_qty|num:0 }}</td>
+        <td class="text-end">{{ row.consumption|fixed:4 }}</td>
+        <td class="text-end">{{ row.requirement|num:2 }}</td>
+        {% if forloop.first %}<td rowspan="{{ n }}">{{ item.unit }}</td>{% endif %}
+        <td class="text-end">{{ row.price|num:4 }}</td>
+        <td class="text-end">{{ row.amount|num:2 }}</td>
+      </tr>
+      {% endfor %}
+      {% endwith %}
+    {% empty %}
+      <tr><td colspan="13" class="text-center text-muted">No BOM materials for this style.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr class="fw-bold"><td colspan="12" class="text-end">Total material cost ({{ order.currency }})</td><td class="text-end">{{ costing.material_total|num:2 }}</td></tr></tfoot>
+  </table>
+
+  <div class="row g-3 keep-together">
+    <div class="col-5">
+      <table class="table table-sm table-bordered mb-0">
+        <thead><tr><th>Other costs</th><th class="text-end">Per pc</th></tr></thead>
+        <tbody>
+          {% for e in costing.extras %}<tr><td>{{ e.name }}</td><td class="text-end">{{ e.cost_per_pc|num:4 }}</td></tr>
+          {% empty %}<tr><td colspan="2" class="text-muted">None</td></tr>{% endfor %}
+        </tbody>
+        <tfoot><tr class="fw-bold"><td>Total other costs / pc</td><td class="text-end">{{ costing.extras_pc|num:4 }}</td></tr></tfoot>
+      </table>
+    </div>
+    <div class="col-7">
+      <table class="table table-sm table-bordered mb-0 print-summary">
+        <tr><th>Material / dozen</th><td>{{ costing.material_dz|num:4 }}</td><th>FOB / pc</th><td>{{ costing.fob|num:4 }}</td></tr>
+        <tr><th>Material / pc</th><td>{{ costing.material_pc|num:4 }}</td><th>Margin / pc</th><td class="fw-bold">{{ costing.margin_pc|num:4 }}</td></tr>
+        <tr><th>Other costs / pc</th><td>{{ costing.extras_pc|num:4 }}</td><th>Margin %</th><td>{{ costing.margin_pct|num:1 }}%</td></tr>
+        <tr><th>Total cost / pc</th><td class="fw-bold">{{ costing.total_pc|num:4 }}</td><th>Order margin</th><td class="fw-bold">{{ costing.margin_total|num:2 }}</td></tr>
+      </table>
+      {% if costing.unpriced %}<div class="small text-danger mt-1">{{ costing.unpriced }} row(s) have no price yet and count as zero.</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="print-sign">
+    <div><span class="sign-name">{{ prepared_by }}</span>Prepared by</div>
+    <div><span class="sign-name"></span>Checked by</div>
+    <div><span class="sign-name"></span>Authorized signature</div>
+  </div>
+</div>
+</body>
+</html>

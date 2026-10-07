@@ -12,7 +12,7 @@
   <div class="col-6 col-lg-3"><div class="erp-card kpi-card"><div class="kpi-value">{{ kpis.orders }}</div><div class="kpi-label">Orders in selection</div></div></div>
   <div class="col-6 col-lg-3"><div class="erp-card kpi-card"><div class="kpi-value">{{ kpis.qty|num:0 }}</div><div class="kpi-label">Pieces</div></div></div>
   <div class="col-6 col-lg-3"><div class="erp-card kpi-card kpi-green"><div class="kpi-value">${{ kpis.value|num:0 }}</div><div class="kpi-label">Order value</div></div></div>
-  <div class="col-6 col-lg-3"><div class="erp-card kpi-card kpi-amber"><div class="kpi-value">{{ kpis.pos }}</div><div class="kpi-label">Supplier POs</div></div></div>
+  {% if kpis.pos is not None %}<div class="col-6 col-lg-3"><div class="erp-card kpi-card kpi-amber"><div class="kpi-value">{{ kpis.pos }}</div><div class="kpi-label">Supplier POs</div></div></div>{% endif %}
 </div>
 
 <div class="row g-3">

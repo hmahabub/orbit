@@ -64,7 +64,7 @@ def pending_items(order):
 
 
 @transaction.atomic
-def generate_supplier_pos(order):
+def generate_supplier_pos(order, user=None):
     """One PO per supplier and material type from every BOM row not yet on a
     PO (materials without a supplier are skipped). Rows for the same
     style/material/color/spec/price become one PO line, with the quantity
@@ -77,7 +77,7 @@ def generate_supplier_pos(order):
 
     created = []
     for (supplier, category), rows in groups.items():
-        po = SupplierPO.objects.create(order=order, supplier=supplier, material_type=category)
+        po = SupplierPO.objects.create(order=order, supplier=supplier, material_type=category, created_by=user)
         merged = OrderedDict()
         for row in rows:
             item = row.item
@@ -102,7 +102,7 @@ def _absorb(target, source_type):
 
 
 @transaction.atomic
-def move_po_lines(po, line_ids, target):
+def move_po_lines(po, line_ids, target, user=None):
     """Move some of a PO's lines: to another PO of the same order (its pk),
     to a brand-new PO ('new'), or off the PO altogether ('pending' — the
     materials go back to the not-ordered list). An emptied PO is deleted.
@@ -116,7 +116,7 @@ def move_po_lines(po, line_ids, target):
     else:
         if target == 'new':
             dest = SupplierPO.objects.create(order=po.order, supplier=po.supplier, material_type=po.material_type,
-                                             delivery_date=po.delivery_date)
+                                             delivery_date=po.delivery_date, created_by=user or po.created_by)
         else:
             dest = SupplierPO.objects.get(pk=target, order=po.order)
             _absorb(dest, po.material_type)

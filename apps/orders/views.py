@@ -8,6 +8,7 @@ from django.db.models import Max, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from . import reports
@@ -36,13 +37,17 @@ DEFAULT_COST_HEADS = ['CM', 'Washing', 'Embellishment', 'Testing', 'Commercial',
 # helpers
 # --------------------------------------------------------------------------
 
+def display_name(user):
+    return (user.get_full_name() or user.username) if user else ''
+
+
 def is_admin(user):
     return user.is_staff or user.is_superuser
 
 
 def require_admin(user):
     if not is_admin(user):
-        raise PermissionDenied('Only admins can see or enter prices.')
+        raise PermissionDenied('Only admins can open costing and supplier POs.')
 
 
 def to_dec(value, default=None):
@@ -70,8 +75,11 @@ def order_url(order, tab, line=None):
     return url
 
 
+ADMIN_TABS = ('costing', 'po')  # prices and suppliers: admins only
+
+
 def tab_unlocked(order, key, user):
-    if key == 'costing' and not is_admin(user):
+    if key in ADMIN_TABS and not is_admin(user):
         return False
     return order.stage >= TAB_STAGE[key]
 
@@ -80,7 +88,7 @@ def tab_states(order, user):
     return [
         {'key': key, 'label': label, 'num': i + 1, 'icon': icon,
          'unlocked': tab_unlocked(order, key, user), 'done': order.stage > stage,
-         'admin_only': key == 'costing'}
+         'admin_locked': key in ADMIN_TABS and not is_admin(user) and order.stage >= stage}
         for i, (key, label, stage, icon) in enumerate(TABS)
     ]
 
@@ -213,6 +221,7 @@ def order_detail(request, pk):
 
 @login_required
 def po_list(request):
+    require_admin(request.user)
     q = request.GET.get('q', '').strip()
     pos = SupplierPO.objects.select_related('order').prefetch_related('lines')
     if q:
@@ -221,10 +230,47 @@ def po_list(request):
     return render(request, 'orders/po_list.html', {'pos': pos, 'q': q, 'is_admin': is_admin(request.user)})
 
 
+def _joined(values):
+    """Distinct non-blank values, in first-seen order, as one string."""
+    seen = []
+    for value in values:
+        if value and value not in seen:
+            seen.append(value)
+    return ', '.join(seen)
+
+
 @login_required
 def po_print(request, po_id):
-    po = get_object_or_404(SupplierPO.objects.select_related('order'), pk=po_id)
-    return render(request, 'orders/po_print.html', {'po': po, 'is_admin': is_admin(request.user)})
+    """Printable PO. Each line carries the detail of the BOM rows it was
+    raised from: placement, body color and garment size."""
+    require_admin(request.user)
+    po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by'), pk=po_id)
+    lines = list(po.lines.prefetch_related('bom_rows__item__line__assortment'))
+    for line in lines:
+        rows = list(line.bom_rows.all())
+        line.style = line.style or _joined(row.item.line.style for row in rows)
+        line.placement = _joined(row.item.placement for row in rows)
+        line.body_color = _joined(row.body_color for row in rows) or ('All colors' if rows else '')
+        line.garment_size = _joined(row.size_label for row in rows)
+    return render(request, 'orders/po_print.html', {
+        'po': po, 'lines': lines, 'prepared_by': display_name(po.created_by or request.user), 'is_admin': True})
+
+
+@login_required
+def costing_print(request, pk, line_id):
+    """Printable cost sheet for one style (browser print / save as PDF)."""
+    require_admin(request.user)
+    order = get_object_or_404(Order, pk=pk)
+    line = get_object_or_404(order.lines.prefetch_related('assortment'), pk=line_id)
+    items = load_bom(line)
+    sizes = line.active_size_indexes
+    return render(request, 'orders/costing_print.html', {
+        'order': order, 'line': line, 'items': items, 'costing': line_costing(line, items),
+        'size_labels': [line.size_label(i) for i in sizes],
+        'assortment': [(row.color, [row.qty_at(i) for i in sizes], row.total) for row in line.assortment.all()],
+        'size_totals': [line.size_total(i) for i in sizes],
+        'prepared_by': display_name(request.user), 'printed_on': timezone.localdate(),
+    })
 
 
 # --------------------------------------------------------------------------
@@ -287,7 +333,7 @@ def advance(request, pk, stage):
 
     order.advance_to(stage)
     next_tab = next(k for k, _, s, _ in TABS if s == stage)
-    if next_tab == 'costing' and not is_admin(request.user):
+    if next_tab in ADMIN_TABS and not is_admin(request.user):
         messages.info(request, 'BOM complete. Costing is now waiting for an admin to enter prices.')
         return redirect(order_url(order, 'bom'))
     messages.success(request, f'Step complete — {dict((k, lbl) for k, lbl, _, _ in TABS)[next_tab]} unlocked.')
@@ -523,6 +569,7 @@ def extra_delete(request, pk, extra_id):
 def po_assign(request, pk):
     """Saves the supplier typed against each not-yet-ordered material, then
     (when the Generate button was used) raises the POs."""
+    require_admin(request.user)
     order = get_object_or_404(Order, pk=pk)
     if order.stage < Order.STAGE_PO:
         raise PermissionDenied
@@ -536,7 +583,7 @@ def po_assign(request, pk):
     if request.POST.get('action') != 'generate':
         messages.success(request, 'Suppliers saved.')
         return redirect(order_url(order, 'po'))
-    created = generate_supplier_pos(order)
+    created = generate_supplier_pos(order, request.user)
     if created:
         messages.success(request, f'{len(created)} supplier PO(s) created: ' + ', '.join(
             f'{po.supplier} ({po.type_label})' for po in created))
@@ -548,6 +595,7 @@ def po_assign(request, pk):
 @login_required
 @require_POST
 def po_move(request, pk, po_id):
+    require_admin(request.user)
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
     order, po_no = po.order, po.po_no
     line_ids = [int(v) for v in request.POST.getlist('line') if v.isdigit()]
@@ -557,7 +605,7 @@ def po_move(request, pk, po_id):
     if not line_ids or not valid:
         messages.error(request, 'Tick the lines to move and choose where they should go.')
         return redirect(order_url(order, 'po'))
-    dest = move_po_lines(po, line_ids, target)
+    dest = move_po_lines(po, line_ids, target, request.user)
     where = 'back to the not-ordered list' if dest is None else f'to {dest.po_no}'
     messages.success(request, f'{len(line_ids)} line(s) moved from {po_no} {where}.')
     return redirect(order_url(order, 'po'))
@@ -566,6 +614,7 @@ def po_move(request, pk, po_id):
 @login_required
 @require_POST
 def po_merge(request, pk):
+    require_admin(request.user)
     order = get_object_or_404(Order, pk=pk)
     ids = [int(v) for v in request.POST.getlist('po') if v.isdigit()]
     pos = list(order.supplier_pos.filter(pk__in=ids))
@@ -584,6 +633,7 @@ def po_merge(request, pk):
 @login_required
 @require_POST
 def po_update(request, pk, po_id):
+    require_admin(request.user)
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
     form = SupplierPOForm(request.POST, instance=po, prefix=f'po{po.pk}')
     if form.is_valid():
@@ -597,6 +647,7 @@ def po_update(request, pk, po_id):
 @login_required
 @require_POST
 def po_lines_save(request, pk, po_id):
+    require_admin(request.user)
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
     admin = is_admin(request.user)
     for line in po.lines.all():
@@ -613,6 +664,7 @@ def po_lines_save(request, pk, po_id):
 @login_required
 @require_POST
 def po_delete(request, pk, po_id):
+    require_admin(request.user)
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
     po_no = po.po_no
     po.delete()
@@ -646,7 +698,7 @@ def report_list(request):
             'orders': len(orders),
             'qty': sum(o.total_qty for o in orders),
             'value': sum((o.total_amount for o in orders), ZERO),
-            'pos': SupplierPO.objects.filter(order__in=orders).count(),
+            'pos': SupplierPO.objects.filter(order__in=orders).count() if admin else None,
         },
     })
     return render(request, 'orders/report_list.html', ctx)

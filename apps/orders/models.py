@@ -24,8 +24,11 @@ SIZE_SETS = {
 SIZE_COUNT = 8
 
 # What kind of material a BOM item is. Supplier POs are raised per type.
-MATERIAL_TYPES = [('fabric', 'Fabric'), ('trims', 'Trims'), ('labels', 'Labels'), ('packing', 'Packing'),
-                  ('other', 'Other')]
+MATERIAL_TYPES = [
+    ('fabric', 'Fabric'), ('lining', 'Lining'), ('interlining', 'Inter-lining'), ('pocketing', 'Pocketing'),
+    ('trims', 'Trims'), ('accessories', 'Accessories'), ('labels', 'Labels'), ('packing', 'Packing'),
+    ('other', 'Other'),
+]
 
 
 # --------------------------------------------------------------------------
@@ -202,7 +205,7 @@ class BOMItem(models.Model):
     ]
 
     line = models.ForeignKey(OrderLine, related_name='bom_items', on_delete=models.CASCADE)
-    category = models.CharField('Type', max_length=10, choices=MATERIAL_TYPES, default='trims')
+    category = models.CharField('Type', max_length=12, choices=MATERIAL_TYPES, default='trims')
     name = models.CharField('Item', max_length=150)
     placement = models.CharField(max_length=100, blank=True)
     supplier = models.CharField(max_length=100, blank=True)
@@ -328,7 +331,7 @@ class SupplierPO(models.Model):
 
     order = models.ForeignKey(Order, related_name='supplier_pos', on_delete=models.CASCADE)
     supplier = models.CharField(max_length=100)
-    material_type = models.CharField('Type', max_length=10, choices=MATERIAL_TYPES, blank=True)  # '' = mixed
+    material_type = models.CharField('Type', max_length=12, choices=MATERIAL_TYPES, blank=True)  # '' = mixed
     po_date = models.DateField(default=timezone.localdate)
     delivery_date = models.DateField('Required delivery', null=True, blank=True)
     pi_no = models.CharField('PI no.', max_length=60, blank=True)
@@ -337,6 +340,8 @@ class SupplierPO(models.Model):
     eta = models.DateField('ETA', null=True, blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
     notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name='supplier_pos')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -352,7 +357,11 @@ class SupplierPO(models.Model):
 
     @property
     def po_no(self):
-        return f'SPO-{self.pk:05d}' if self.pk else 'SPO-NEW'
+        """SPO-YY-xxxxx: year the PO was raised, then its running number."""
+        if not self.pk:
+            return 'SPO-NEW'
+        raised = timezone.localtime(self.created_at) if self.created_at else timezone.localtime()
+        return f'SPO-{raised:%y}-{self.pk:05d}'
 
     @property
     def total_amount(self):

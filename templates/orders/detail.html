@@ -24,8 +24,8 @@
         <b>{% if t.done and t.key != tab %}<i class="bi bi-check-lg"></i>{% else %}{{ t.num }}{% endif %}</b> {{ t.label }}
       </a>
     {% else %}
-      <span class="step locked" title="{% if t.admin_only and order.stage >= 5 %}Admin only{% else %}Complete the previous step first{% endif %}">
-        <b>{% if t.admin_only and order.stage >= 5 %}<i class="bi bi-shield-lock"></i>{% else %}<i class="bi bi-lock"></i>{% endif %}</b> {{ t.label }}
+      <span class="step locked" title="{% if t.admin_locked %}Admin only{% else %}Complete the previous step first{% endif %}">
+        <b>{% if t.admin_locked %}<i class="bi bi-shield-lock"></i>{% else %}<i class="bi bi-lock"></i>{% endif %}</b> {{ t.label }}
       </span>
     {% endif %}
   {% endfor %}

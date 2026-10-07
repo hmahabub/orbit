@@ -182,7 +182,7 @@ def shipment_plan(orders):
 def material_requirement(orders):
     types = dict(MATERIAL_TYPES)
     cols = [Col('Buyer PO'), Col('Style'), Col('Type'), Col('Item'), Col('Placement'), Col('Rows', 'int'),
-            Col('Total req.', 'qty'), Col('Unit'), Col('Supplier'), Col('PO status'),
+            Col('Total req.', 'qty'), Col('Unit'), Col('Supplier', admin=True), Col('PO status', admin=True),
             Col('Amount', 'money', total=True, admin=True)]
     rows = []
     for o in orders:
@@ -269,12 +269,12 @@ REPORTS = OrderedDict([
     ('buyers', ('Buyer summary', 'Orders, pieces and value per buyer.', 'bi-people', False, buyer_summary)),
     ('shipments', ('Shipment plan', 'Orders, pieces and value shipping each month, and what is overdue.',
                    'bi-calendar-week', False, shipment_plan)),
-    ('materials', ('Material requirement', 'Every BOM material with its total requirement, supplier and PO status.',
+    ('materials', ('Material requirement', 'Every BOM material with its type and total requirement.',
                    'bi-diagram-3', False, material_requirement)),
     ('suppliers', ('Supplier summary', 'POs per supplier: how many, which types, open vs received.',
-                   'bi-building', False, supplier_summary)),
+                   'bi-building', True, supplier_summary)),
     ('po-register', ('Supplier PO register', 'Every supplier PO with PI, LC, ETD, ETA and status.',
-                     'bi-truck', False, po_register)),
+                     'bi-truck', True, po_register)),
     ('profitability', ('Costing & margin', 'Cost per piece against FOB and the margin for every style.',
                        'bi-graph-up-arrow', True, profitability)),
     ('material-cost', ('Material cost by type', 'What each order spends on fabric, trims, labels and packing.',

@@ -2,10 +2,10 @@
 <div class="continue-bar">
   <span class="text-muted small">{{ hint }}</span>
   {% if order.stage >= next_stage %}
-    {% if next_key != 'costing' or is_admin %}
+    {% if is_admin or next_key != 'costing' and next_key != 'po' %}
       <a class="btn btn-outline-primary" href="?tab={{ next_key }}{% if line %}&line={{ line.pk }}{% endif %}">{{ next_label }} <i class="bi bi-arrow-right"></i></a>
     {% else %}
-      <span class="badge text-bg-light border"><i class="bi bi-shield-lock"></i> Costing is with admin</span>
+      <span class="badge text-bg-light border"><i class="bi bi-shield-lock"></i> Costing and supplier POs are with admin</span>
     {% endif %}
   {% else %}
     <form method="post" action="{% url 'advance' order.pk next_stage %}">{% csrf_token %}
