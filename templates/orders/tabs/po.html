@@ -64,13 +64,14 @@
           PO date {{ po.po_date|date:"d M Y" }}
           {% if po.delivery_date %} · Delivery {{ po.delivery_date|date:"d M Y" }}{% endif %}
           {% if po.pi_no %} · PI {{ po.pi_no }}{% endif %}{% if po.lc_no %} · LC {{ po.lc_no }}{% endif %}
+          {% if po.pi_to %} · PI to {{ po.pi_to }}{% endif %}{% if po.destination %} · Dest. {{ po.destination }}{% endif %}
           {% if po.etd %} · ETD {{ po.etd|date:"d M" }}{% endif %}{% if po.eta %} · ETA {{ po.eta|date:"d M" }}{% endif %}
         </div>
       </div>
     </div>
     <div class="d-flex gap-1">
       <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#poModal{{ po.pk }}"><i class="bi bi-pencil"></i> Details</button>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_print' po.pk %}" target="_blank"><i class="bi bi-printer"></i> Print</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download this PO as Excel (uses saved quantities)"><i class="bi bi-file-earmark-excel"></i> Excel</a>
       <button class="btn btn-sm btn-outline-danger" form="pod{{ po.pk }}" data-confirm="Delete {{ po.po_no }}? Its materials go back to the not-ordered list."><i class="bi bi-trash"></i></button>
     </div>
   </div>
@@ -130,6 +131,10 @@
         {% include "orders/_field.html" with field=f.delivery_date cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.pi_no cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.lc_no cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.pi_to cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.pi_to_location cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.factory_location cls="col-md-6" %}
+        {% include "orders/_field.html" with field=f.destination cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.etd cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.eta cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.notes cls="col-12" %}

@@ -16,6 +16,16 @@ class WorkflowTests(TestCase):
         self.merch = User.objects.create_user('merch', password='x')
         self.client.force_login(self.merch)
 
+    def xlsx_text(self, response):
+        """Every cell of a downloaded workbook, as one string."""
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('spreadsheetml', response['Content-Type'])
+        ws = load_workbook(BytesIO(response.content)).active
+        return ' | '.join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
+
     def detail(self, order, tab, **extra):
         params = {'tab': tab, **extra}
         return self.client.get(reverse('order_detail', args=[order.pk]), params)
@@ -211,21 +221,40 @@ class WorkflowTests(TestCase):
         self.client.post(reverse('po_merge', args=[order.pk]), {'po': all_po_ids()})
         self.assertEqual(SupplierPO.objects.count(), before)
 
-        # PO number is SPO-YY-xxxxx; the print carries BOM detail and who prepared it.
+        # Numbers are ORD-YY-xxxxx / SPO-YY-xxxxx.
         po = SupplierPO.objects.filter(supplier='Roundstone').first()
+        self.assertRegex(order.order_no, r'^ORD-\d{2}-\d{5}$')
         self.assertRegex(po.po_no, r'^SPO-\d{2}-\d{5}$')
         self.assertEqual(po.created_by, self.admin)
-        html = self.client.get(reverse('po_print', args=[po.pk])).content.decode()
-        for text in [po.po_no, 'Main body', 'FERN CAMO', '58&quot;', 'boss']:
-            self.assertIn(text, html)
-        self.assertContains(self.client.get(reverse('costing_print', args=[order.pk, line.pk])), 'Cost Sheet')
+
+        # PO details: PI / delivery fields are saved from the Details form...
+        prefix = f'po{po.pk}-'
+        self.client.post(reverse('po_update', args=[order.pk, po.pk]), {
+            prefix + 'supplier': 'Roundstone', prefix + 'material_type': 'fabric', prefix + 'status': 'issued',
+            prefix + 'po_date': '2026-10-10', prefix + 'pi_no': 'PI-77', prefix + 'pi_to': 'Orbit Sourcing Ltd',
+            prefix + 'pi_to_location': 'Dhaka', prefix + 'factory_location': 'Gazipur',
+            prefix + 'destination': 'Chattogram port', prefix + 'etd': '2026-11-20'})
+        po.refresh_from_db()
+        self.assertEqual((po.pi_to, po.factory_location, po.destination), ('Orbit Sourcing Ltd', 'Gazipur',
+                                                                           'Chattogram port'))
+        # ...and appear in the Excel PO with PI no., ETD, BOM detail and the preparer, but no ship date.
+        text = self.xlsx_text(self.client.get(reverse('po_excel', args=[po.pk])))
+        for expected in [po.po_no, 'PI-77', 'Orbit Sourcing Ltd', 'Dhaka', 'Gazipur', 'Chattogram port', 'ETD',
+                         'Main body', 'FERN CAMO', '58"', 'boss', 'Prepared by']:
+            self.assertIn(expected, text, expected)
+        self.assertNotIn('Ship date', text)
+        self.assertIn('=I', text)   # amounts are live formulas
+
+        text = self.xlsx_text(self.client.get(reverse('costing_excel', args=[order.pk, line.pk])))
+        for expected in ['Cost Sheet', 'Twill', 'OYSTER', 'Total material cost', 'Margin / pc', order.order_no]:
+            self.assertIn(expected, text, expected)
 
         # Supplier POs are admin-only, like costing.
         self.client.force_login(self.merch)
         self.assertEqual(self.detail(order, 'po').context['tab'], 'bom')
         self.assertNotContains(self.client.get(reverse('home')), reverse('po_list'))
-        for url in [reverse('po_list'), reverse('po_print', args=[po.pk]),
-                    reverse('costing_print', args=[order.pk, line.pk])]:
+        for url in [reverse('po_list'), reverse('po_excel', args=[po.pk]),
+                    reverse('costing_excel', args=[order.pk, line.pk])]:
             self.assertEqual(self.client.get(url).status_code, 403, url)
         for name, args in [('po_assign', [order.pk]), ('po_merge', [order.pk]), ('po_move', [order.pk, po.pk]),
                            ('po_update', [order.pk, po.pk]), ('po_lines_save', [order.pk, po.pk]),

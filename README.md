@@ -15,7 +15,7 @@ The six steps are tabs on one order page. Each tab unlocks when the one before i
 | **3. Assortment** | Color × size breakdown per style. Pick **letter sizes** (S, M, L, XL, XXL, 3XL, 4XL, 5XL) or **number sizes** (30–44) | Every style's breakdown adds up to its line qty |
 | **4. BOM** | Excel-style sheet per style: type, item, placement, color, size, consumption/pc ⇄ total req. **No prices, no suppliers** | Every style has materials |
 | **5. Costing** | **Admin only.** Price per BOM row, CM/other costs, cost/pc vs FOB, margin per style | Every BOM row has a price |
-| **6. Supplier PO** | Choose a supplier per material, then generate one PO per supplier and material type. Move lines between POs, merge POs, PI/LC/ETD/ETA, printable PO | — |
+| **6. Supplier PO** | Choose a supplier per material, then generate one PO per supplier and material type. Move lines between POs, merge POs, PI/LC/ETD/ETA and delivery details, Excel PO | — |
 
 After login, users land on the list of **running orders**.
 
@@ -25,8 +25,8 @@ Buyer, factory, supplier and material names are typed in directly. There are no 
 
 An **admin** is a user with *staff status* (set in Django admin → Users). Only admins can:
 
-- open the Costing tab, enter prices and print the cost sheet
-- open the Supplier PO tab and the Supplier PO list, and print POs
+- open the Costing tab, enter prices and download the cost sheet
+- open the Supplier PO tab and the Supplier PO list, and download POs
 - open the supplier and costing reports
 - complete the Costing step
 - delete orders
@@ -58,7 +58,11 @@ Every BOM material has a **Type**: Fabric, Lining, Inter-lining, Pocketing, Trim
 2. **Generate.** One PO is raised per supplier *and* type, so a supplier giving both fabric and trims gets two POs. Materials left without a supplier stay in the list.
 3. **Adjust.** Tick lines inside a PO and move them to another PO, to a new PO, or back to "not ordered". Tick two or more POs of the same supplier and merge them into one. A PO holding more than one type shows as **Mixed**. The supplier, type, dates, PI and LC of a PO are edited under **Details**.
 
-PO numbers read **SPO-YY-xxxxx**: the year the PO was raised, then its running number. The printed PO shows each line's placement, body color, color combination, size and spec from the BOM, and the name of the user who raised it under *Prepared by*.
+Order numbers read **ORD-YY-xxxxx** and PO numbers **SPO-YY-xxxxx**: the year it was entered, then its running number.
+
+A PO's **Details** hold the supplier, type, status, dates, PI no., LC no., PI to, PI to location, factory location, destination, ETD and ETA.
+
+Each PO downloads as an **Excel** document laid out for printing (landscape, one page wide). It shows those details, each line's placement, body color, color combination, size and spec from the BOM, and the name of the user who raised it under *Prepared by*. Amounts and the total are live formulas. The Costing tab has the same kind of Excel download for a style's cost sheet.
 
 ## Reports
 
@@ -110,9 +114,10 @@ apps/orders/
   models.py             Order, OrderLine, AssortmentRow, BOMItem/BOMRow, CostExtra, SupplierPO/Line
   services.py           BOM loading, costing summary, supplier PO generation, move and merge
   reports.py            the reports and their Excel/CSV downloads
+  exports.py            Excel documents: supplier PO and cost sheet
   views.py              order workspace (one view per tab action)
   management/commands/seed_demo.py
-templates/orders/       home, order workspace (tabs/*.html), PO list, printable PO
+templates/orders/       home, order workspace (tabs/*.html), PO list, reports
 static/                 css/style.css (noorbit navy/teal theme), js/app.js (live totals)
 ```
 

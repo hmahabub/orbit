@@ -85,8 +85,8 @@ class CostExtraForm(BootstrapMixin, forms.ModelForm):
 class SupplierPOForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = SupplierPO
-        fields = ['supplier', 'material_type', 'po_date', 'delivery_date', 'status', 'pi_no', 'lc_no', 'etd', 'eta',
-                  'notes']
+        fields = ['supplier', 'material_type', 'status', 'po_date', 'delivery_date', 'pi_no', 'lc_no', 'pi_to',
+                  'pi_to_location', 'factory_location', 'destination', 'etd', 'eta', 'notes']
         widgets = {
             'po_date': DateInput(), 'delivery_date': DateInput(), 'etd': DateInput(), 'eta': DateInput(),
             'notes': forms.Textarea(attrs={'rows': 2}),

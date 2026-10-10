@@ -61,7 +61,11 @@ class Order(models.Model):
 
     @property
     def order_no(self):
-        return f'ORD-{self.pk:05d}' if self.pk else 'ORD-NEW'
+        """ORD-YY-xxxxx: year the order was entered, then its running number."""
+        if not self.pk:
+            return 'ORD-NEW'
+        entered = timezone.localtime(self.created_at) if self.created_at else timezone.localtime()
+        return f'ORD-{entered:%y}-{self.pk:05d}'
 
     @property
     def total_qty(self):
@@ -335,6 +339,10 @@ class SupplierPO(models.Model):
     po_date = models.DateField(default=timezone.localdate)
     delivery_date = models.DateField('Required delivery', null=True, blank=True)
     pi_no = models.CharField('PI no.', max_length=60, blank=True)
+    pi_to = models.CharField('PI to', max_length=120, blank=True)
+    pi_to_location = models.CharField('PI to location', max_length=200, blank=True)
+    factory_location = models.CharField(max_length=200, blank=True)
+    destination = models.CharField(max_length=200, blank=True)
     lc_no = models.CharField('LC no.', max_length=60, blank=True)
     etd = models.DateField('ETD', null=True, blank=True)
     eta = models.DateField('ETA', null=True, blank=True)

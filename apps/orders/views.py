@@ -8,10 +8,9 @@ from django.db.models import Max, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import reports
+from . import exports, reports
 from .forms import BOMItemForm, CostExtraForm, OrderForm, OrderLineForm, SupplierPOForm
 from .models import (
     MATERIAL_TYPES, SIZE_COUNT, ZERO, AssortmentRow, BOMItem, BOMRow, CostExtra, Order, OrderLine, SupplierPO,
@@ -230,47 +229,21 @@ def po_list(request):
     return render(request, 'orders/po_list.html', {'pos': pos, 'q': q, 'is_admin': is_admin(request.user)})
 
 
-def _joined(values):
-    """Distinct non-blank values, in first-seen order, as one string."""
-    seen = []
-    for value in values:
-        if value and value not in seen:
-            seen.append(value)
-    return ', '.join(seen)
-
-
 @login_required
-def po_print(request, po_id):
-    """Printable PO. Each line carries the detail of the BOM rows it was
-    raised from: placement, body color and garment size."""
+def po_excel(request, po_id):
+    """The supplier PO as an Excel document."""
     require_admin(request.user)
     po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by'), pk=po_id)
-    lines = list(po.lines.prefetch_related('bom_rows__item__line__assortment'))
-    for line in lines:
-        rows = list(line.bom_rows.all())
-        line.style = line.style or _joined(row.item.line.style for row in rows)
-        line.placement = _joined(row.item.placement for row in rows)
-        line.body_color = _joined(row.body_color for row in rows) or ('All colors' if rows else '')
-        line.garment_size = _joined(row.size_label for row in rows)
-    return render(request, 'orders/po_print.html', {
-        'po': po, 'lines': lines, 'prepared_by': display_name(po.created_by or request.user), 'is_admin': True})
+    return exports.supplier_po_xlsx(po, display_name(po.created_by or request.user))
 
 
 @login_required
-def costing_print(request, pk, line_id):
-    """Printable cost sheet for one style (browser print / save as PDF)."""
+def costing_excel(request, pk, line_id):
+    """One style's cost sheet as an Excel document (uses saved prices)."""
     require_admin(request.user)
     order = get_object_or_404(Order, pk=pk)
     line = get_object_or_404(order.lines.prefetch_related('assortment'), pk=line_id)
-    items = load_bom(line)
-    sizes = line.active_size_indexes
-    return render(request, 'orders/costing_print.html', {
-        'order': order, 'line': line, 'items': items, 'costing': line_costing(line, items),
-        'size_labels': [line.size_label(i) for i in sizes],
-        'assortment': [(row.color, [row.qty_at(i) for i in sizes], row.total) for row in line.assortment.all()],
-        'size_totals': [line.size_total(i) for i in sizes],
-        'prepared_by': display_name(request.user), 'printed_on': timezone.localdate(),
-    })
+    return exports.cost_sheet_xlsx(order, line, display_name(request.user))
 
 
 # --------------------------------------------------------------------------

@@ -21,7 +21,7 @@ urlpatterns = [
     path('orders/<int:pk>/bom/<int:item_id>/delete/', views.bom_item_delete, name='bom_item_delete'),
 
     path('orders/<int:pk>/lines/<int:line_id>/costing/', views.costing_save, name='costing_save'),
-    path('orders/<int:pk>/lines/<int:line_id>/costing/print/', views.costing_print, name='costing_print'),
+    path('orders/<int:pk>/lines/<int:line_id>/costing/excel/', views.costing_excel, name='costing_excel'),
     path('orders/<int:pk>/lines/<int:line_id>/costing/extra/', views.extra_add, name='extra_add'),
     path('orders/<int:pk>/costing/extra/<int:extra_id>/delete/', views.extra_delete, name='extra_delete'),
 
@@ -35,5 +35,5 @@ urlpatterns = [
     path('supplier-po/', views.po_list, name='po_list'),
     path('reports/', views.report_list, name='report_list'),
     path('reports/<slug:key>/', views.report_detail, name='report_detail'),
-    path('supplier-po/<int:po_id>/print/', views.po_print, name='po_print'),
+    path('supplier-po/<int:po_id>/excel/', views.po_excel, name='po_excel'),
 ]

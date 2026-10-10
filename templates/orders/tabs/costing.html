@@ -5,7 +5,7 @@
       <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
         <h2 class="card-title-sm mb-0"><i class="bi bi-calculator"></i> Cost sheet — {{ line.style }} <span class="badge erp-badge-admin ms-1"><i class="bi bi-shield-lock"></i> Admin only</span></h2>
         <div class="d-flex gap-1">
-          <a class="btn btn-sm btn-outline-secondary" href="{% url 'costing_print' order.pk line.pk %}" target="_blank" title="Open the printable cost sheet (uses saved prices)"><i class="bi bi-file-earmark-pdf"></i> Print / PDF</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'costing_excel' order.pk line.pk %}" title="Download this cost sheet as Excel (uses saved prices)"><i class="bi bi-file-earmark-excel"></i> Excel</a>
           <button class="btn btn-sm btn-erp-primary" form="priceForm"><i class="bi bi-save"></i> Save prices</button>
         </div>
       </div>

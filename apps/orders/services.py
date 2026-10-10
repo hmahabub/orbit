@@ -116,7 +116,9 @@ def move_po_lines(po, line_ids, target, user=None):
     else:
         if target == 'new':
             dest = SupplierPO.objects.create(order=po.order, supplier=po.supplier, material_type=po.material_type,
-                                             delivery_date=po.delivery_date, created_by=user or po.created_by)
+                                             delivery_date=po.delivery_date, created_by=user or po.created_by,
+                                             pi_to=po.pi_to, pi_to_location=po.pi_to_location,
+                                             factory_location=po.factory_location, destination=po.destination)
         else:
             dest = SupplierPO.objects.get(pk=target, order=po.order)
             _absorb(dest, po.material_type)
