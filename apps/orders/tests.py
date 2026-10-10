@@ -239,14 +239,14 @@ class WorkflowTests(TestCase):
                                                                            'Chattogram port'))
         # ...and appear in the Excel PO with PI no., ETD, BOM detail and the preparer, but no ship date.
         text = self.xlsx_text(self.client.get(reverse('po_excel', args=[po.pk])))
-        for expected in [po.po_no, 'PI-77', 'Orbit Sourcing Ltd', 'Dhaka', 'Gazipur', 'Chattogram port', 'ETD',
+        for expected in ['ORBIT', 'Faisal Dastagir Complex, North Kattali', po.po_no, 'PI-77', 'Orbit Sourcing Ltd', 'Dhaka', 'Gazipur', 'Chattogram port', 'ETD',
                          'Main body', 'FERN CAMO', '58"', 'boss', 'Prepared by']:
             self.assertIn(expected, text, expected)
         self.assertNotIn('Ship date', text)
         self.assertIn('=I', text)   # amounts are live formulas
 
         text = self.xlsx_text(self.client.get(reverse('costing_excel', args=[order.pk, line.pk])))
-        for expected in ['Cost Sheet', 'Twill', 'OYSTER', 'Total material cost', 'Margin / pc', order.order_no]:
+        for expected in ['Pahartoli, Chattogram, Bangladesh', 'Cost Sheet', 'Twill', 'OYSTER', 'Total material cost', 'Margin / pc', order.order_no]:
             self.assertIn(expected, text, expected)
 
         # Supplier POs are admin-only, like costing.

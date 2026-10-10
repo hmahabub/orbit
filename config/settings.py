@@ -82,4 +82,8 @@ WHITENOISE_USE_FINDERS = True
 DATE_INPUT_FORMATS = ['%Y-%m-%d']
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Letterhead on the Excel supplier PO and cost sheet.
+COMPANY_NAME = 'Orbit'
+COMPANY_ADDRESS = 'Faisal Dastagir Complex, North Kattali, Pahartoli, Chattogram, Bangladesh'
+
 MESSAGE_TAGS = {40: 'danger'}  # messages.ERROR -> Bootstrap's alert-danger

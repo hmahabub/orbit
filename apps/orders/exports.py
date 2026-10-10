@@ -4,6 +4,7 @@ amounts and totals, so the file can be adjusted in Excel."""
 
 import io
 
+from django.conf import settings
 from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -68,12 +69,15 @@ class Sheet:
 
     def title(self, text, right_text):
         mid = self.cols // 2
-        self.cell(1, 'ORBIT', bold=True, size=18, color=NAVY, box=False)
+        self.cell(1, settings.COMPANY_NAME.upper(), bold=True, size=18, color=NAVY, box=False)
         self.merge(1, mid)
         self.cell(mid + 1, right_text, bold=True, size=14, color='FFFFFF', fill=HEAD_FILL, align='center', box=False)
         self.merge(mid + 1, self.cols)
         self.ws.row_dimensions[self.row].height = 26
         self.row += 1
+        self.cell(1, settings.COMPANY_ADDRESS, box=False, color='445064')
+        self.merge(1, self.cols)
+        self.row += 2
         self.cell(1, text, bold=True, size=12, box=False)
         self.merge(1, self.cols)
         self.row += 2
