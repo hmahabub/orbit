@@ -24,8 +24,10 @@ a { color: var(--erp-teal-dark); }
 
 /* ---------- Navbar ---------- */
 .erp-navbar { background-color: var(--erp-navy); box-shadow: 0 2px 6px rgba(0,0,0,.15); }
-.erp-navbar .navbar-brand { font-weight: 800; letter-spacing: .12em; color: #fff; }
-.erp-navbar .navbar-brand span, .login-brand span, .print-brand span { color: var(--erp-amber); }
+.erp-navbar .navbar-brand { font-weight: 800; letter-spacing: .12em; color: #fff; display: flex; align-items: center; gap: .55rem; }
+/* The logo's needle is navy, so it sits on a white tile against the navy bar. */
+.brand-logo { height: 38px; width: auto; background: #fff; border-radius: .45rem; padding: 3px 5px; }
+.brand-text span, .login-brand span { color: var(--erp-amber); }
 .erp-navbar .nav-link { color: rgba(255,255,255,.8) !important; font-weight: 500; }
 .erp-navbar .nav-link:hover, .erp-navbar .nav-link.active { color: #fff !important; }
 .erp-navbar .nav-link.active { box-shadow: inset 0 -3px 0 var(--erp-amber); }
@@ -177,6 +179,7 @@ tr.clickable { cursor: pointer; }
   background: linear-gradient(135deg, var(--erp-navy) 0%, var(--erp-navy-dark) 100%); }
 .erp-login-card { width: 100%; max-width: 380px; background: #fff; border-radius: .6rem; padding: 2.25rem 2rem; box-shadow: 0 12px 32px rgba(0,0,0,.3); }
 .login-brand { font-size: 2rem; font-weight: 800; letter-spacing: .15em; color: var(--erp-navy); }
+.login-logo { height: 72px; width: auto; margin-bottom: .4rem; }
 
 /* ---------- Print ---------- */
 @media print {

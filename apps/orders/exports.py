@@ -7,11 +7,13 @@ import io
 from django.conf import settings
 from django.http import HttpResponse
 from openpyxl import Workbook
+from openpyxl.drawing.image import Image
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from .services import line_costing, load_bom
 
+LOGO_PATH = settings.BASE_DIR / 'static' / 'image' / 'orbit_logo.png'
 NAVY = '10233F'
 THIN = Side(style='thin', color='9AA5B1')
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -69,11 +71,14 @@ class Sheet:
 
     def title(self, text, right_text):
         mid = self.cols // 2
-        self.cell(1, settings.COMPANY_NAME.upper(), bold=True, size=18, color=NAVY, box=False)
-        self.merge(1, mid)
+        logo = Image(LOGO_PATH)
+        logo.height, logo.width = 50, round(50 * logo.width / logo.height)
+        self.ws.add_image(logo, 'A1')
+        self.cell(3, settings.COMPANY_NAME.upper(), bold=True, size=18, color=NAVY, box=False)
+        self.merge(3, mid)
         self.cell(mid + 1, right_text, bold=True, size=14, color='FFFFFF', fill=HEAD_FILL, align='center', box=False)
         self.merge(mid + 1, self.cols)
-        self.ws.row_dimensions[self.row].height = 26
+        self.ws.row_dimensions[self.row].height = 42
         self.row += 1
         self.cell(1, settings.COMPANY_ADDRESS, box=False, color='445064')
         self.merge(1, self.cols)

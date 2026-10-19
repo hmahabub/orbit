@@ -1,11 +1,13 @@
 {% extends "base.html" %}
+{% load orbit %}
 {% block title %}Sign in · Orbit ERP{% endblock %}
 {% block main_class %}{% endblock %}
 {% block content %}
 <div class="erp-login-wrap">
   <div class="erp-login-card">
     <div class="text-center mb-4">
-      <div class="login-brand"><i class="bi bi-globe2"></i> OR<span>BIT</span></div>
+      <img src="{% asset 'image/orbit_logo.png' %}" alt="Orbit" class="login-logo">
+      <div class="login-brand">OR<span>BIT</span></div>
       <small class="text-muted">Orders · Assortment · BOM · Costing · Supplier PO</small>
     </div>
     {% if form.errors %}<div class="alert alert-danger py-2">Invalid username or password.</div>{% endif %}
