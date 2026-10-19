@@ -121,4 +121,15 @@ templates/orders/       home, order workspace (tabs/*.html), PO list, reports
 static/                 css/style.css (noorbit navy/teal theme), js/app.js (live totals)
 ```
 
-For production, set `ORBIT_SECRET_KEY`, `ORBIT_DEBUG=0` and `ORBIT_ALLOWED_HOSTS`. Then run `python manage.py collectstatic`.
+## Settings (.env)
+
+Settings are read from a `.env` file in the project folder, next to `manage.py`. Copy `.env.example` to `.env` and fill it in. `.env` is never committed. Variables set in the server's real environment take precedence over the file.
+
+| Variable | Meaning |
+|---|---|
+| `ORBIT_SECRET_KEY` | Long random string. Keep it secret and keep it unchanged, since changing it logs everyone out |
+| `ORBIT_DEBUG` | `1` on your own computer, `0` on the live site |
+| `ORBIT_ALLOWED_HOSTS` | Comma-separated host names, e.g. `orbit.asgroupbd.com` |
+| `ORBIT_CSRF_TRUSTED_ORIGINS` | Comma-separated origins allowed to post forms, e.g. `https://orbit.asgroupbd.com` |
+
+On the live server, also run `python manage.py collectstatic`.

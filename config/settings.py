@@ -5,11 +5,32 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def load_env_file(path):
+    """Read KEY=VALUE lines from a .env file into the environment. Variables
+    already set in the real environment win, so a server can override it."""
+    if not path.exists():
+        return
+    for raw in path.read_text(encoding='utf-8').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_env_file(BASE_DIR / '.env')
+
+
+def env_list(name, default):
+    return [item.strip() for item in os.environ.get(name, default).split(',') if item.strip()]
+
+
 SECRET_KEY = os.environ.get('ORBIT_SECRET_KEY', 'django-insecure-orbit-dev-key-change-me-in-production')
 DEBUG = os.environ.get('ORBIT_DEBUG', '1') == '1'
-ALLOWED_HOSTS = os.environ.get('ORBIT_ALLOWED_HOSTS', 'localhost,127.0.0.1,orbit.asgroupbd.com').split(',')
+ALLOWED_HOSTS = env_list('ORBIT_ALLOWED_HOSTS', 'localhost,127.0.0.1,orbit.asgroupbd.com')
 # Forms posted from the live site over HTTPS pass Django's CSRF origin check.
-CSRF_TRUSTED_ORIGINS = ['https://orbit.asgroupbd.com']
+CSRF_TRUSTED_ORIGINS = env_list('ORBIT_CSRF_TRUSTED_ORIGINS', 'https://orbit.asgroupbd.com')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
