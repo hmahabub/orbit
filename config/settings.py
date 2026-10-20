@@ -73,12 +73,30 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+# Database, from .env. SQLite needs only a file name; PostgreSQL and MySQL
+# need their driver installed (psycopg / mysqlclient) and the connection details.
+DB_ENGINES = {
+    'sqlite': 'django.db.backends.sqlite3',
+    'postgresql': 'django.db.backends.postgresql',
+    'mysql': 'django.db.backends.mysql',
 }
+DB_ENGINE = os.environ.get('ORBIT_DB_ENGINE', 'sqlite').strip().lower() or 'sqlite'
+if DB_ENGINE not in DB_ENGINES:
+    raise ValueError(f'ORBIT_DB_ENGINE must be one of {", ".join(DB_ENGINES)}, not "{DB_ENGINE}".')
+if DB_ENGINE == 'sqlite':
+    DATABASES = {'default': {
+        'ENGINE': DB_ENGINES['sqlite'],
+        'NAME': BASE_DIR / os.environ.get('ORBIT_DB_NAME', 'db.sqlite3'),  # relative to the project folder
+    }}
+else:
+    DATABASES = {'default': {
+        'ENGINE': DB_ENGINES[DB_ENGINE],
+        'NAME': os.environ.get('ORBIT_DB_NAME', 'orbit'),
+        'USER': os.environ.get('ORBIT_DB_USER', ''),
+        'PASSWORD': os.environ.get('ORBIT_DB_PASSWORD', ''),
+        'HOST': os.environ.get('ORBIT_DB_HOST', 'localhost'),
+        'PORT': os.environ.get('ORBIT_DB_PORT', ''),
+    }}
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -103,8 +121,9 @@ WHITENOISE_USE_FINDERS = True
 DATE_INPUT_FORMATS = ['%Y-%m-%d']
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Letterhead on the Excel supplier PO and cost sheet.
-COMPANY_NAME = 'Orbit'
-COMPANY_ADDRESS = 'Faisal Dastagir Complex, North Kattali, Pahartoli, Chattogram, Bangladesh'
+# Letterhead on the Excel supplier PO and cost sheet, from .env.
+COMPANY_NAME = os.environ.get('ORBIT_COMPANY_NAME', 'Orbit')
+COMPANY_ADDRESS = os.environ.get('ORBIT_COMPANY_ADDRESS', '')
+COMPANY_LOGO = BASE_DIR / os.environ.get('ORBIT_COMPANY_LOGO', 'static/image/orbit_logo.png')
 
 MESSAGE_TAGS = {40: 'danger'}  # messages.ERROR -> Bootstrap's alert-danger

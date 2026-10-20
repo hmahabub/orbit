@@ -238,15 +238,19 @@ class WorkflowTests(TestCase):
         self.assertEqual((po.pi_to, po.factory_location, po.destination), ('Orbit Sourcing Ltd', 'Gazipur',
                                                                            'Chattogram port'))
         # ...and appear in the Excel PO with PI no., ETD, BOM detail and the preparer, but no ship date.
+        # The letterhead comes from settings (.env).
+        letterhead = self.settings(COMPANY_NAME='Acme Textiles', COMPANY_ADDRESS='12 Test Road, Dhaka')
+        letterhead.enable()
+        self.addCleanup(letterhead.disable)
         text = self.xlsx_text(self.client.get(reverse('po_excel', args=[po.pk])))
-        for expected in ['ORBIT', 'Faisal Dastagir Complex, North Kattali', po.po_no, 'PI-77', 'Orbit Sourcing Ltd', 'Dhaka', 'Gazipur', 'Chattogram port', 'ETD',
+        for expected in ['ACME TEXTILES', '12 Test Road, Dhaka', po.po_no, 'PI-77', 'Orbit Sourcing Ltd', 'Dhaka', 'Gazipur', 'Chattogram port', 'ETD',
                          'Main body', 'FERN CAMO', '58"', 'boss', 'Prepared by']:
             self.assertIn(expected, text, expected)
         self.assertNotIn('Ship date', text)
         self.assertIn('=I', text)   # amounts are live formulas
 
         text = self.xlsx_text(self.client.get(reverse('costing_excel', args=[order.pk, line.pk])))
-        for expected in ['Pahartoli, Chattogram, Bangladesh', 'Cost Sheet', 'Twill', 'OYSTER', 'Total material cost', 'Margin / pc', order.order_no]:
+        for expected in ['12 Test Road, Dhaka', 'Cost Sheet', 'Twill', 'OYSTER', 'Total material cost', 'Margin / pc', order.order_no]:
             self.assertIn(expected, text, expected)
 
         # Supplier POs are admin-only, like costing.

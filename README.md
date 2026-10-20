@@ -131,5 +131,11 @@ Settings are read from a `.env` file in the project folder, next to `manage.py`.
 | `ORBIT_DEBUG` | `1` on your own computer, `0` on the live site |
 | `ORBIT_ALLOWED_HOSTS` | Comma-separated host names, e.g. `orbit.asgroupbd.com` |
 | `ORBIT_CSRF_TRUSTED_ORIGINS` | Comma-separated origins allowed to post forms, e.g. `https://orbit.asgroupbd.com` |
+| `ORBIT_DB_ENGINE` | `sqlite` (default), `postgresql` or `mysql` |
+| `ORBIT_DB_NAME` | SQLite: the database file, relative to the project folder (default `db.sqlite3`). Otherwise: the database name |
+| `ORBIT_DB_USER`, `ORBIT_DB_PASSWORD`, `ORBIT_DB_HOST`, `ORBIT_DB_PORT` | Connection details for PostgreSQL / MySQL. Install the driver too: `pip install psycopg` or `pip install mysqlclient` |
+| `ORBIT_COMPANY_NAME` | Company name on the Excel supplier PO and cost sheet |
+| `ORBIT_COMPANY_ADDRESS` | Address line under it |
+| `ORBIT_COMPANY_LOGO` | Logo image, relative to the project folder (default `static/image/orbit_logo.png`) |
 
 On the live server, also run `python manage.py collectstatic`.
