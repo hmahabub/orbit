@@ -1,7 +1,8 @@
-"""Excel documents: the supplier PO and the cost sheet. Both are laid out to
-be printed (landscape, fitted to one page wide) and keep live formulas for
-amounts and totals, so the file can be adjusted in Excel."""
+"""Downloadable documents: the supplier PO (Excel and PDF) and the cost
+sheet (Excel). The Excel files are laid out to be printed (landscape, fitted
+to one page wide) and keep live formulas for amounts and totals."""
 
+import datetime
 import io
 
 from django.conf import settings
@@ -154,22 +155,32 @@ def po_lines_with_detail(po):
     return lines
 
 
-def supplier_po_xlsx(po, prepared_by):
+def po_details(po):
+    """The PO header fields, in display order (pairs sit side by side)."""
     order = po.order
-    sh = Sheet(po.po_no, [5, 21, 34, 18, 16, 18, 9, 12, 11, 8, 11, 14])
-    sh.title(f'Purchase Order · {po.type_label}', po.po_no)
-    sh.info([
-        ('Supplier', po.supplier), ('PO date', po.po_date, 'dd mmm yyyy'),
+    return [
+        ('Supplier', po.supplier), ('PO date', po.po_date),
         ('PI to', po.pi_to), ('PI to location', po.pi_to_location),
         ('PI no.', po.pi_no), ('LC no.', po.lc_no),
         ('Buyer', order.buyer), ('Buyer PO', order.po_number),
         ('Factory', order.factory), ('Factory location', po.factory_location),
-        ('Destination', po.destination), ('Required delivery', po.delivery_date, 'dd mmm yyyy'),
-        ('ETD', po.etd, 'dd mmm yyyy'), ('ETA', po.eta, 'dd mmm yyyy'),
-    ], spans=(((1, 2), (3, 5)), ((6, 7), (8, 12))))
+        ('Destination', po.destination), ('Required delivery', po.delivery_date),
+        ('ETD', po.etd), ('ETA', po.eta),
+    ]
 
-    sh.header(['#', 'Style', 'Item', 'Placement', 'Body color', 'Color combination', 'Size', 'Spec', 'Qty', 'Unit',
-               'Price', 'Amount'])
+
+PO_COLUMNS = ['#', 'Style', 'Item', 'Placement', 'Body color', 'Color combination', 'Size', 'Spec', 'Qty', 'Unit',
+              'Price', 'Amount']
+
+
+def supplier_po_xlsx(po, prepared_by):
+    order = po.order
+    sh = Sheet(po.po_no, [5, 21, 34, 18, 16, 18, 9, 12, 11, 8, 11, 14])
+    sh.title(f'Purchase Order · {po.type_label}', po.po_no)
+    sh.info([(label, value, 'dd mmm yyyy') if isinstance(value, datetime.date) else (label, value)
+             for label, value in po_details(po)], spans=(((1, 2), (3, 5)), ((6, 7), (8, 12))))
+
+    sh.header(PO_COLUMNS)
     first = sh.row
     for n, line in enumerate(po_lines_with_detail(po), start=1):
         for col, value in enumerate([n, line.style, line.description, line.placement, line.body_color, line.color,
@@ -195,6 +206,121 @@ def supplier_po_xlsx(po, prepared_by):
         sh.ws.row_dimensions[sh.row].height = 15 * (po.notes.count('\n') + 1 + len(po.notes) // 120)
     sh.signatures(prepared_by)
     return sh.response(f'{po.po_no} {po.supplier}')
+
+
+def supplier_po_pdf(po, prepared_by):
+    """The supplier PO as a PDF: same content and layout as the Excel one."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Image as PdfImage
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table
+
+    navy, grid = colors.HexColor('#' + NAVY), colors.HexColor('#9AA5B1')
+    label_bg, total_bg = colors.HexColor('#F3F6F9'), colors.HexColor('#E3F3F3')
+    base_style = ParagraphStyle('base', fontName='Helvetica', fontSize=8, leading=10)
+    bold = ParagraphStyle('bold', parent=base_style, fontName='Helvetica-Bold')
+    head = ParagraphStyle('head', parent=bold, textColor=colors.white, alignment=1)
+    right = ParagraphStyle('right', parent=base_style, alignment=2)
+
+    def p(value, style=base_style):
+        if isinstance(value, datetime.date):
+            value = value.strftime('%d %b %Y')
+        text = '' if value in (None, '') else str(value)
+        return Paragraph(text.replace('&', '&amp;').replace('<', '&lt;').replace('\n', '<br/>'), style)
+
+    order = po.order
+    out = io.BytesIO()
+    doc = SimpleDocTemplate(out, pagesize=landscape(A4), leftMargin=12 * mm, rightMargin=12 * mm,
+                            topMargin=10 * mm, bottomMargin=12 * mm, title=f'{po.po_no} {po.supplier}',
+                            author=settings.COMPANY_NAME)
+    width = doc.width
+    story = []
+
+    # Letterhead: logo + company name + address on the left, PO number box on the right.
+    name = Paragraph(settings.COMPANY_NAME.upper(), ParagraphStyle('co', fontName='Helvetica-Bold', fontSize=18,
+                                                                 leading=22, textColor=navy))
+    address = Paragraph(settings.COMPANY_ADDRESS, ParagraphStyle('addr', parent=base_style, fontSize=8.5,
+                                                                textColor=colors.HexColor('#445064')))
+    brand = [name, address]
+    if settings.COMPANY_LOGO.is_file():
+        from PIL import Image as PilImage
+        with PilImage.open(settings.COMPANY_LOGO) as im:
+            ratio = im.width / im.height
+        # Size has to be given up front; ReportLab ignores it when set afterwards.
+        logo = PdfImage(str(settings.COMPANY_LOGO), width=14 * mm * ratio, height=14 * mm)
+        brand = Table([[logo, [name, address]]], colWidths=[logo.drawWidth + 4 * mm, None],
+                      style=[('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0)])
+    po_box = Table([[Paragraph(po.po_no, ParagraphStyle('pono', fontName='Helvetica-Bold', fontSize=14,
+                                                        textColor=colors.white, alignment=1))]],
+                   colWidths=[70 * mm], style=[('BACKGROUND', (0, 0), (-1, -1), navy),
+                                               ('TOPPADDING', (0, 0), (-1, -1), 7),
+                                               ('BOTTOMPADDING', (0, 0), (-1, -1), 9)])
+    story.append(Table([[brand, po_box]], colWidths=[width - 70 * mm, 70 * mm],
+                       style=[('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                              ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph(f'Purchase Order · {po.type_label}', ParagraphStyle('t', parent=bold, fontSize=11)))
+    story.append(Spacer(1, 3 * mm))
+
+    # PO details, two pairs per row.
+    details = po_details(po)
+    rows = []
+    for i in range(0, len(details), 2):
+        row = []
+        for label, value in details[i:i + 2]:
+            row += [p(label, bold), p(value if value not in (None, '') else '—')]
+        rows.append(row)
+    w = width / 2
+    story.append(Table(rows, colWidths=[w * .32, w * .68, w * .32, w * .68], style=[
+        ('GRID', (0, 0), (-1, -1), .5, grid), ('BACKGROUND', (0, 0), (0, -1), label_bg),
+        ('BACKGROUND', (2, 0), (2, -1), label_bg), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2)]))
+    story.append(Spacer(1, 5 * mm))
+
+    # Lines.
+    data = [[p(label, head) for label in PO_COLUMNS]]
+    for n, line in enumerate(po_lines_with_detail(po), start=1):
+        data.append([p(n), p(line.style), p(line.description), p(line.placement), p(line.body_color), p(line.color),
+                     p(line.garment_size), p(line.spec), p(f'{line.qty:,.0f}', right), p(line.unit),
+                     p(f'{line.price:,.4f}' if line.price is not None else '', right),
+                     p(f'{line.amount:,.2f}', right)])
+    data.append([p(f'Total ({order.currency})', ParagraphStyle('tot', parent=bold, alignment=2))] + [''] * 10
+                + [p(f'{po.total_amount:,.2f}', ParagraphStyle('totv', parent=bold, alignment=2))])
+    shares = [3, 10, 18, 10, 9, 10, 5, 7, 7, 5, 7, 9]
+    col_widths = [width * share / sum(shares) for share in shares]
+    story.append(Table(data, colWidths=col_widths, repeatRows=1, style=[
+        ('GRID', (0, 0), (-1, -1), .5, grid), ('BACKGROUND', (0, 0), (-1, 0), navy),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('SPAN', (0, -1), (-2, -1)),
+        ('BACKGROUND', (0, -1), (-1, -1), total_bg),
+        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+
+    if po.notes:
+        story.append(Spacer(1, 4 * mm))
+        story.append(p(f'Notes: {po.notes}'))
+
+    # Signatures.
+    story.append(Spacer(1, 16 * mm))
+    sign = Table([[p(prepared_by, ParagraphStyle('sn', parent=bold, alignment=1)), '', '', '', ''],
+                  [p('Prepared by', ParagraphStyle('sl', parent=base_style, alignment=1)), '',
+                   p('Checked by', ParagraphStyle('sl2', parent=base_style, alignment=1)), '',
+                   p('Authorized signature', ParagraphStyle('sl3', parent=base_style, alignment=1))]],
+                 colWidths=[width * .26, width * .11, width * .26, width * .11, width * .26],
+                 style=[('LINEBELOW', (0, 0), (0, 0), .7, colors.black), ('LINEBELOW', (2, 0), (2, 0), .7, colors.black),
+                        ('LINEBELOW', (4, 0), (4, 0), .7, colors.black)])
+    story.append(sign)
+
+    def page_number(canvas, doc_):
+        canvas.setFont('Helvetica', 7)
+        canvas.setFillColor(colors.HexColor('#6B7686'))
+        canvas.drawRightString(doc_.pagesize[0] - 12 * mm, 6 * mm, f'{po.po_no} · page {doc_.page}')
+
+    doc.build(story, onFirstPage=page_number, onLaterPages=page_number)
+    response = HttpResponse(out.getvalue(), content_type='application/pdf')
+    safe = ''.join(ch if ch.isalnum() or ch in '-_ ' else '-' for ch in f'{po.po_no} {po.supplier}').strip()
+    response['Content-Disposition'] = f'attachment; filename="{safe}.pdf"'
+    return response
 
 
 # --------------------------------------------------------------------------

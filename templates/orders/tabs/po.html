@@ -72,6 +72,7 @@
     <div class="d-flex gap-1">
       <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#poModal{{ po.pk }}"><i class="bi bi-pencil"></i> Details</button>
       <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download this PO as Excel (uses saved quantities)"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_pdf' po.pk %}" title="Download this PO as PDF (uses saved quantities)"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
       <button class="btn btn-sm btn-outline-danger" form="pod{{ po.pk }}" data-confirm="Delete {{ po.po_no }}? Its materials go back to the not-ordered list."><i class="bi bi-trash"></i></button>
     </div>
   </div>

@@ -249,6 +249,12 @@ class WorkflowTests(TestCase):
         self.assertNotIn('Ship date', text)
         self.assertIn('=I', text)   # amounts are live formulas
 
+        # Same PO as a PDF.
+        pdf = self.client.get(reverse('po_pdf', args=[po.pk]))
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+        self.assertIn(f'{po.po_no} Roundstone.pdf', pdf['Content-Disposition'])
+
         text = self.xlsx_text(self.client.get(reverse('costing_excel', args=[order.pk, line.pk])))
         for expected in ['12 Test Road, Dhaka', 'Cost Sheet', 'Twill', 'OYSTER', 'Total material cost', 'Margin / pc', order.order_no]:
             self.assertIn(expected, text, expected)
@@ -257,7 +263,7 @@ class WorkflowTests(TestCase):
         self.client.force_login(self.merch)
         self.assertEqual(self.detail(order, 'po').context['tab'], 'bom')
         self.assertNotContains(self.client.get(reverse('home')), reverse('po_list'))
-        for url in [reverse('po_list'), reverse('po_excel', args=[po.pk]),
+        for url in [reverse('po_list'), reverse('po_excel', args=[po.pk]), reverse('po_pdf', args=[po.pk]),
                     reverse('costing_excel', args=[order.pk, line.pk])]:
             self.assertEqual(self.client.get(url).status_code, 403, url)
         for name, args in [('po_assign', [order.pk]), ('po_merge', [order.pk]), ('po_move', [order.pk, po.pk]),

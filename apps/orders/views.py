@@ -238,6 +238,14 @@ def po_excel(request, po_id):
 
 
 @login_required
+def po_pdf(request, po_id):
+    """The supplier PO as a PDF."""
+    require_admin(request.user)
+    po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by'), pk=po_id)
+    return exports.supplier_po_pdf(po, display_name(po.created_by or request.user))
+
+
+@login_required
 def costing_excel(request, pk, line_id):
     """One style's cost sheet as an Excel document (uses saved prices)."""
     require_admin(request.user)

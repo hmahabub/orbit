@@ -29,7 +29,8 @@
           <td class="text-end">{{ po.lines.all|length }}</td>
           {% if is_admin %}<td class="text-end">{{ po.total_amount|num:2 }}</td>{% endif %}
           <td><span class="badge po-status-{{ po.status }}">{{ po.get_status_display }}</span></td>
-          <td><a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download Excel"><i class="bi bi-file-earmark-excel"></i></a></td>
+          <td class="text-nowrap"><a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download Excel"><i class="bi bi-file-earmark-excel"></i></a>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_pdf' po.pk %}" title="Download PDF"><i class="bi bi-file-earmark-pdf"></i></a></td>
         </tr>
       {% empty %}
         <tr><td colspan="14" class="text-center text-muted py-5">No supplier POs yet. They are generated from an order's Supplier PO tab.</td></tr>

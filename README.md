@@ -15,7 +15,7 @@ The six steps are tabs on one order page. Each tab unlocks when the one before i
 | **3. Assortment** | Color × size breakdown per style. Pick **letter sizes** (S, M, L, XL, XXL, 3XL, 4XL, 5XL) or **number sizes** (30–44) | Every style's breakdown adds up to its line qty |
 | **4. BOM** | Excel-style sheet per style: type, item, placement, color, size, consumption/pc ⇄ total req. **No prices, no suppliers** | Every style has materials |
 | **5. Costing** | **Admin only.** Price per BOM row, CM/other costs, cost/pc vs FOB, margin per style | Every BOM row has a price |
-| **6. Supplier PO** | Choose a supplier per material, then generate one PO per supplier and material type. Move lines between POs, merge POs, PI/LC/ETD/ETA and delivery details, Excel PO | — |
+| **6. Supplier PO** | Choose a supplier per material, then generate one PO per supplier and material type. Move lines between POs, merge POs, PI/LC/ETD/ETA and delivery details, Excel and PDF PO | — |
 
 After login, users land on the list of **running orders**.
 
@@ -62,7 +62,7 @@ Order numbers read **ORD-YY-xxxxx** and PO numbers **SPO-YY-xxxxx**: the year it
 
 A PO's **Details** hold the supplier, type, status, dates, PI no., LC no., PI to, PI to location, factory location, destination, ETD and ETA.
 
-Each PO downloads as an **Excel** document laid out for printing (landscape, one page wide). It shows those details, each line's placement, body color, color combination, size and spec from the BOM, and the name of the user who raised it under *Prepared by*. Amounts and the total are live formulas. The Costing tab has the same kind of Excel download for a style's cost sheet.
+Each PO downloads as an **Excel** document laid out for printing (landscape, one page wide), or as a **PDF** with the same content. It shows those details, each line's placement, body color, color combination, size and spec from the BOM, and the name of the user who raised it under *Prepared by*. Amounts and the total are live formulas. The Costing tab has the same kind of Excel download for a style's cost sheet.
 
 ## Reports
 
@@ -114,7 +114,7 @@ apps/orders/
   models.py             Order, OrderLine, AssortmentRow, BOMItem/BOMRow, CostExtra, SupplierPO/Line
   services.py           BOM loading, costing summary, supplier PO generation, move and merge
   reports.py            the reports and their Excel/CSV downloads
-  exports.py            Excel documents: supplier PO and cost sheet
+  exports.py            supplier PO (Excel, PDF) and cost sheet (Excel) documents
   views.py              order workspace (one view per tab action)
   management/commands/seed_demo.py
 templates/orders/       home, order workspace (tabs/*.html), PO list, reports

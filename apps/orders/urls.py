@@ -36,4 +36,5 @@ urlpatterns = [
     path('reports/', views.report_list, name='report_list'),
     path('reports/<slug:key>/', views.report_detail, name='report_detail'),
     path('supplier-po/<int:po_id>/excel/', views.po_excel, name='po_excel'),
+    path('supplier-po/<int:po_id>/pdf/', views.po_pdf, name='po_pdf'),
 ]
