@@ -20,7 +20,7 @@
       <tbody>
       {% for po in pos %}
         <tr>
-          <td class="fw-semibold"><a href="{% url 'order_detail' po.order.pk %}?tab=po">{{ po.po_no }}</a></td>
+          <td class="fw-semibold"><a href="{% url 'po_view' po.pk %}">{{ po.po_no }}</a></td>
           <td>{{ po.supplier }}</td>
           <td>{{ po.type_label }}</td>
           <td><a href="{% url 'order_detail' po.order.pk %}">{{ po.order.po_number }}</a></td>
@@ -33,7 +33,8 @@
           <td><span class="badge approval-badge-{{ po.approval }}" {% if po.approval_note %}title="{{ po.approval_note }}"{% endif %}>{{ po.get_approval_display }}</span></td>
           <td><span class="badge po-status-{{ po.status }}">{{ po.get_status_display }}</span></td>
           <td>{{ po.creator_name|default:"—" }}</td>
-          <td class="text-nowrap"><a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download Excel"><i class="bi bi-file-earmark-excel"></i></a>
+          <td class="text-nowrap"><a class="btn btn-sm btn-outline-primary" href="{% url 'po_view' po.pk %}" title="View"><i class="bi bi-eye"></i></a>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download Excel"><i class="bi bi-file-earmark-excel"></i></a>
             <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_pdf' po.pk %}" title="Download PDF"><i class="bi bi-file-earmark-pdf"></i></a></td>
         </tr>
       {% empty %}

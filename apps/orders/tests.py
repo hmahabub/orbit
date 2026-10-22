@@ -230,12 +230,18 @@ class WorkflowTests(TestCase):
         self.assertNotIn('Ship date', text)
         pdf = self.client.get(reverse('po_pdf', args=[po.pk]))
         self.assertTrue(pdf.content.startswith(b'%PDF'))
+        # ...and the on-screen view shows the same data without downloading.
+        view = self.client.get(reverse('po_view', args=[po.pk]))
+        for expected in [po.po_no, 'PI-77', 'Gazipur', 'Chattogram port', 'Main body', 'STEEL', '58&quot;',
+                         'DRAFT — NOT APPROVED', 'Prepared by', 'merch']:
+            self.assertContains(view, expected, msg_prefix=expected)
 
         # Another non-staff user can see and download it, but not change it or approve it.
         other = get_user_model().objects.create_user('other', password='x')
         self.client.force_login(other)
         self.assertFalse(self.detail(order, 'po').context['pos'][0][0].can_edit)
         self.assertEqual(self.client.get(reverse('po_excel', args=[po.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('po_view', args=[po.pk])).status_code, 200)
         for name in ['po_move', 'po_update', 'po_lines_save', 'po_delete', 'po_resubmit', 'po_approve', 'po_reject',
                      'po_reopen']:
             self.assertEqual(self.client.post(reverse(name, args=[order.pk, po.pk])).status_code, 403, name)

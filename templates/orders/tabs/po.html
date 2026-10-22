@@ -56,7 +56,7 @@
     <div class="d-flex align-items-start gap-2">
       {% if movable_targets|length > 1 and po.can_edit %}<input type="checkbox" class="form-check-input mt-2" name="po" value="{{ po.pk }}" form="mergeForm" title="Tick to merge">{% endif %}
       <div>
-        <span class="fw-bold fs-5">{{ po.po_no }}</span>
+        <a class="fw-bold fs-5 text-decoration-none" href="{% url 'po_view' po.pk %}">{{ po.po_no }}</a>
         <span class="ms-2 fs-6">{{ po.supplier }}</span>
         <span class="badge type-badge ms-1">{{ po.type_label }}</span>
         <span class="badge po-status-{{ po.status }} ms-1">{{ po.get_status_display }}</span>
@@ -71,6 +71,7 @@
     </div>
     <div class="d-flex gap-1">
       <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#poModal{{ po.pk }}"><i class="bi bi-{% if po.can_edit_details %}pencil{% else %}eye{% endif %}"></i> Details</button>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_view' po.pk %}" title="View the full PO"><i class="bi bi-eye"></i> View</a>
       <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download this PO as Excel (uses saved values)"><i class="bi bi-file-earmark-excel"></i> Excel</a>
       <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_pdf' po.pk %}" title="Download this PO as PDF (uses saved values)"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
       {% if po.can_edit %}<button class="btn btn-sm btn-outline-danger" form="pod{{ po.pk }}" data-confirm="Delete {{ po.po_no }}? Its materials go back to the not-ordered list."><i class="bi bi-trash"></i></button>{% endif %}

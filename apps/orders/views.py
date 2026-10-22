@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -258,6 +259,29 @@ def approvals(request):
     pos = (SupplierPO.objects.filter(approval='pending').select_related('order', 'created_by')
            .prefetch_related('lines').order_by('created_at'))
     return render(request, 'orders/approvals.html', {'pos': pos})
+
+
+@login_required
+def po_view(request, po_id):
+    """Everything on the PO document — details, lines with BOM detail, total,
+    approval — on screen, without downloading."""
+    po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by', 'approved_by'), pk=po_id)
+    po.can_edit = po.editable_by(request.user)
+    warning, authorized_by = exports.po_approval(po)
+    details = exports.po_details(po)
+    referer = request.META.get('HTTP_REFERER', '')
+    return render(request, 'orders/po_view.html', {
+        'po': po,
+        'lines': exports.po_lines_with_detail(po),
+        'details': [details[i:i + 2] for i in range(0, len(details), 2)],
+        'warning': warning,
+        'prepared_by': display_name(po.created_by),
+        'authorized_by': authorized_by,
+        'company_name': settings.COMPANY_NAME,
+        'company_address': settings.COMPANY_ADDRESS,
+        'back_url': referer if referer and request.get_host() in referer and referer != request.build_absolute_uri()
+        else reverse('po_list'),
+    })
 
 
 @login_required
