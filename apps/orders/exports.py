@@ -297,7 +297,7 @@ class PdfDoc:
             row = []
             for label, value in pairs[i:i + 2]:
                 row += [self.p(label, self.bold), self.p(value if value not in (None, '') else '—')]
-            rows.append(row)
+            rows.append(row + [''] * (4 - len(row)))
         w = self.width / 2
         self.add(self.Table(rows, colWidths=[w * .32, w * .68, w * .32, w * .68], style=[
             ('GRID', (0, 0), (-1, -1), .5, self.grid), ('BACKGROUND', (0, 0), (0, -1), self.label_bg),
@@ -367,21 +367,27 @@ def supplier_po_pdf(po, prepared_by):
 # cost sheet
 # --------------------------------------------------------------------------
 
-def style_info(order, line):
-    return [
+def style_info(order, line, with_fob=True):
+    """Order/style details; the BOM leaves out the FOB price."""
+    pairs = [
         ('Buyer', order.buyer), ('Order', order.order_no),
         ('Factory', order.factory), ('Ship date', order.ship_date),
         ('Style', line.style), ('Item', line.description),
-        ('Order qty (pcs)', line.qty), (f'FOB / pc ({order.currency})', line.unit_price),
+        ('Order qty (pcs)', line.qty),
     ]
+    if with_fob:
+        pairs.append((f'FOB / pc ({order.currency})', line.unit_price))
+    return pairs
 
 
-def style_header(sh, order, line, spans):
-    """Order/style details and the color x size breakdown at the top of a
-    style's sheet. Returns the cells holding the order qty and FOB."""
+def style_header(sh, order, line, spans, pairs=None):
+    """Order/style details (`pairs`, default: style_info with FOB) and the
+    color x size breakdown at the top of a style's sheet. Returns the cells
+    holding the order qty and FOB."""
     formats = {'Ship date': 'dd mmm yyyy', 'Order qty (pcs)': QTY}
+    pairs = style_info(order, line) if pairs is None else pairs
     sh.info([(label, float(value) if label.startswith('FOB') else value,
-              RATE if label.startswith('FOB') else formats.get(label)) for label, value in style_info(order, line)],
+              RATE if label.startswith('FOB') else formats.get(label)) for label, value in pairs],
             spans=spans)
     cells = (f'${get_column_letter(spans[0][1][0])}${sh.row - 2}', f'${get_column_letter(spans[1][1][0])}${sh.row - 2}')
 
@@ -528,7 +534,8 @@ def bom_xlsx(order, line, prepared_by):
     items = load_bom(line)
     sh = Sheet(f'BOM {line.style}', [5, 12, 34, 18, 15, 18, 13, 11, 11, 12, 8, 18])
     sh.title(f'Bill of Materials · {line.style}', order.po_number)
-    style_header(sh, order, line, spans=(((1, 2), (3, 5)), ((6, 7), (8, 12))))
+    style_header(sh, order, line, spans=(((1, 2), (3, 5)), ((6, 7), (8, 12))),
+                 pairs=style_info(order, line, with_fob=False) + [('Materials', len(items))])
     sh.header(BOM_COLUMNS)
     for n, item in enumerate(items, start=1):
         top = sh.row
@@ -561,7 +568,7 @@ def bom_pdf(order, line, prepared_by):
     items = load_bom(line)
     pdf = PdfDoc(f'BOM {order.po_number} {line.style}', order.po_number, f'Bill of Materials · {line.style}')
     pdf.details([(label, f'{value:,}' if isinstance(value, int) else value)
-                 for label, value in style_info(order, line)])
+                 for label, value in style_info(order, line, with_fob=False) + [('Materials', len(items))]])
     p, right = pdf.p, pdf.right
 
     # Color x size breakdown.

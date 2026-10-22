@@ -299,6 +299,7 @@ class WorkflowTests(TestCase):
                          'merch']:
             self.assertIn(expected, text, expected)
         self.assertNotIn('Price', text)
+        self.assertNotIn('FOB', text)
         pdf = self.client.get(reverse('bom_download', args=[order.pk, line.pk, 'pdf']))
         self.assertEqual(pdf['Content-Type'], 'application/pdf')
         self.assertTrue(pdf.content.startswith(b'%PDF'))
