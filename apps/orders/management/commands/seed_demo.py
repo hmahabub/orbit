@@ -133,7 +133,7 @@ class Command(BaseCommand):
 
         generate_supplier_pos(order, order.created_by)
         SupplierPO.objects.filter(order=order).update(approval='approved', approved_by=order.created_by,
-                                                      approved_at=timezone.now())
+                                                      approved_at=timezone.now(), status='issued')
         SupplierPO.objects.filter(order=order, supplier='Roundstone').update(
             status='issued', pi_no='RS-PI-2611', etd=datetime.date(2026, 11, 20), eta=datetime.date(2026, 11, 28))
 

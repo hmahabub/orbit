@@ -157,8 +157,8 @@
         {% include "orders/_field.html" with field=f.eta cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.notes cls="col-12" %}
       </div>
-      {% if po.is_approved %}<div class="form-text mt-2">Supplier and type are fixed once approved.</div>
-      {% else %}<div class="form-text mt-2">Status stays Draft until a staff user approves this PO.</div>{% endif %}
+      {% if po.is_approved %}<div class="form-text mt-2">Supplier and type are fixed once approved. Status: Issued, then Closed when done, or Cancelled.</div>
+      {% else %}<div class="form-text mt-2">Status stays Draft until a staff user approves this PO; approval issues it.</div>{% endif %}
       </div>
       </fieldset>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% if po.can_edit_details %}Cancel{% else %}Close{% endif %}</button>{% if po.can_edit_details %}<button class="btn btn-erp-primary"><i class="bi bi-save"></i> Save</button>{% endif %}</div>

@@ -225,19 +225,20 @@ def _pos_for(orders):
 def supplier_summary(orders):
     groups = OrderedDict()
     for po in _pos_for(orders):
-        g = groups.setdefault(po.supplier, {'pos': 0, 'lines': 0, 'open': 0, 'received': 0, 'types': set(),
-                                            'amount': ZERO})
+        g = groups.setdefault(po.supplier, {'pos': 0, 'lines': 0, 'draft': 0, 'issued': 0, 'closed': 0,
+                                            'cancelled': 0, 'types': set(), 'amount': ZERO})
         g['pos'] += 1
         g['lines'] += len(po.lines.all())
-        g['received' if po.status == 'received' else 'open'] += 1
+        g[po.status if po.status in g else 'draft'] += 1
         g['types'].add(po.type_label)
-        g['amount'] += po.total_amount
+        if po.status != 'cancelled':
+            g['amount'] += po.total_amount
     cols = [Col('Supplier'), Col('Types'), Col('POs', 'int', total=True), Col('Lines', 'int', total=True),
-            Col('Open POs', 'int', total=True), Col('Received', 'int', total=True),
-            Col('PO amount', 'money', total=True)]
-    rows = [[supplier, ', '.join(sorted(g['types'])), g['pos'], g['lines'], g['open'], g['received'], g['amount']]
-            for supplier, g in groups.items()]
-    return Table(cols, rows, chart=(0, 6))
+            Col('Draft', 'int', total=True), Col('Issued', 'int', total=True), Col('Closed', 'int', total=True),
+            Col('Cancelled', 'int', total=True), Col('PO amount (excl. cancelled)', 'money', total=True)]
+    rows = [[supplier, ', '.join(sorted(g['types'])), g['pos'], g['lines'], g['draft'], g['issued'], g['closed'],
+             g['cancelled'], g['amount']] for supplier, g in groups.items()]
+    return Table(cols, rows, chart=(0, 8))
 
 
 def po_register(orders):
@@ -261,7 +262,7 @@ REPORTS = OrderedDict([
                    'bi-calendar-week', shipment_plan)),
     ('materials', ('Material requirement', 'Every BOM material with its type and total requirement.',
                    'bi-diagram-3', material_requirement)),
-    ('suppliers', ('Supplier summary', 'POs per supplier: how many, which types, open vs received.',
+    ('suppliers', ('Supplier summary', 'POs per supplier: how many, which types, draft / issued / closed / cancelled.',
                    'bi-building', supplier_summary)),
     ('po-register', ('Supplier PO register', 'Every supplier PO with PI, LC, ETD, ETA, status and approval.',
                      'bi-truck', po_register)),

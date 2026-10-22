@@ -65,8 +65,8 @@ a { color: var(--erp-teal-dark); }
 .status-cancelled { background: #8a94a3; }
 .po-status-draft { background: #8a94a3; }
 .po-status-issued { background: var(--erp-teal); }
-.po-status-partial { background: var(--erp-amber); color: var(--erp-navy); }
-.po-status-received { background: var(--erp-green); }
+.po-status-closed { background: var(--erp-green); }
+.po-status-cancelled { background: var(--erp-red); }
 
 .status-dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .4rem; }
 .status-dot.red { background: var(--erp-red); }

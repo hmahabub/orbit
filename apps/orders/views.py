@@ -685,6 +685,9 @@ def po_update(request, pk, po_id):
         if not updated.is_approved and updated.status != 'draft':
             updated.status = 'draft'
             messages.warning(request, f'{po.po_no} stays a draft until a staff user approves it.')
+        elif updated.is_approved and updated.status == 'draft':
+            updated.status = 'issued'
+            messages.warning(request, f'{po.po_no} is approved, so it stays issued. A staff user can reopen it.')
         updated.save()
         messages.success(request, f'{po.po_no} saved.')
     else:
@@ -735,8 +738,9 @@ def po_approve(request, pk, po_id):
         return _back(request, po)
     po.approval, po.approved_by, po.approved_at = 'approved', request.user, timezone.now()
     po.approval_note = request.POST.get('note', '').strip()
-    po.save(update_fields=['approval', 'approved_by', 'approved_at', 'approval_note'])
-    messages.success(request, f'{po.po_no} approved.')
+    po.status = 'issued'  # approval issues the PO
+    po.save(update_fields=['approval', 'approved_by', 'approved_at', 'approval_note', 'status'])
+    messages.success(request, f'{po.po_no} approved and issued.')
     return _back(request, po)
 
 

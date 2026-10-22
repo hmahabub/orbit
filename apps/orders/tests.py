@@ -267,14 +267,18 @@ class WorkflowTests(TestCase):
         self.client.force_login(self.admin)
         self.client.post(reverse('po_approve', args=[order.pk, po.pk]))
         po.refresh_from_db()
-        self.assertEqual((po.approval, po.approved_by), ('approved', self.admin))
+        self.assertEqual((po.approval, po.approved_by, po.status), ('approved', self.admin, 'issued'))
         self.assertNotIn(po, self.client.get(reverse('approvals')).context['pos'])
         self.assertEqual(self.client.post(reverse('po_lines_save', args=[order.pk, po.pk])).status_code, 403)
         self.client.force_login(self.merch)
         self.assertEqual(self.client.post(reverse('po_delete', args=[order.pk, po.pk])).status_code, 403)
-        self.client.post(reverse('po_update', args=[order.pk, po.pk]), {**details, prefix + 'supplier': 'Someone else'})
+        self.client.post(reverse('po_update', args=[order.pk, po.pk]), {**details, prefix + 'supplier': 'Someone else',
+                                                                        prefix + 'status': 'draft'})
         po.refresh_from_db()
-        self.assertEqual((po.status, po.supplier), ('issued', 'Roundstone'))
+        self.assertEqual((po.status, po.supplier), ('issued', 'Roundstone'))  # approved: never back to draft
+        self.client.post(reverse('po_update', args=[order.pk, po.pk]), {**details, prefix + 'status': 'closed'})
+        po.refresh_from_db()
+        self.assertEqual(po.status, 'closed')
         text = self.xlsx_text(self.client.get(reverse('po_excel', args=[po.pk])))
         self.assertNotIn('NOT APPROVED', text)
         self.assertIn('boss', text)  # approver under Authorized signature

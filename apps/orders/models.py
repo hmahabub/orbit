@@ -330,8 +330,8 @@ class CostExtra(models.Model):
 # --------------------------------------------------------------------------
 
 class SupplierPO(models.Model):
-    STATUS_CHOICES = [('draft', 'Draft'), ('issued', 'Issued'), ('partial', 'Partly received'),
-                      ('received', 'Received')]
+    # Draft until approved; approval issues it. Closed = done, Cancelled = not going ahead.
+    STATUS_CHOICES = [('draft', 'Draft'), ('issued', 'Issued'), ('closed', 'Closed'), ('cancelled', 'Cancelled')]
 
     order = models.ForeignKey(Order, related_name='supplier_pos', on_delete=models.CASCADE)
     supplier = models.CharField(max_length=100)
