@@ -179,7 +179,7 @@ tr.clickable { cursor: pointer; }
   background: linear-gradient(135deg, var(--erp-navy) 0%, var(--erp-navy-dark) 100%); }
 .erp-login-card { width: 100%; max-width: 380px; background: #fff; border-radius: .6rem; padding: 2.25rem 2rem; box-shadow: 0 12px 32px rgba(0,0,0,.3); }
 .login-brand { font-size: 2rem; font-weight: 800; letter-spacing: .15em; color: var(--erp-navy); }
-.login-logo { height: 72px; width: auto; margin-bottom: .4rem; }
+.login-logo { display: block; height: 120px; width: auto; max-width: 100%; margin: 0 auto .6rem; }
 
 /* ---------- Print ---------- */
 @media print {
