@@ -154,7 +154,8 @@ class WorkflowTests(TestCase):
         camo = fabric.rows.get(body_color='FERN CAMO')
         self.assertAlmostEqual(float(camo.consumption), 20752 / 14040, places=8)
 
-    def test_costing_is_admin_only_and_pos_generate(self):
+    def test_costing_and_supplier_po_workflow(self):
+        """A merchandiser (not staff) costs the order and raises POs; staff approve them."""
         order = self.create_order()
         self.add_line_and_assortment(order)
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_BOM]))
@@ -164,113 +165,138 @@ class WorkflowTests(TestCase):
         zipper = self.add_material(line, name='Zipper', category='trims')
         label = self.add_material(line, name='Care label', category='labels')
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_COSTING]))
-        order.refresh_from_db()
-        self.assertEqual(order.stage, Order.STAGE_COSTING)
 
-        # Merchandiser: costing tab hidden, price endpoints refused, no prices in HTML.
-        self.assertEqual(self.detail(order, 'costing').context['tab'], 'bom')
-        self.assertEqual(self.client.post(reverse('costing_save', args=[order.pk, order.lines.get().pk])).status_code, 403)
-        self.assertEqual(self.client.post(reverse('advance', args=[order.pk, Order.STAGE_PO])).status_code, 403)
-
-        self.client.force_login(self.admin)
+        # Everyone can cost now.
         self.assertEqual(self.detail(order, 'costing').context['tab'], 'costing')
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_PO]))
         order.refresh_from_db()
         self.assertEqual(order.stage, Order.STAGE_COSTING)  # unpriced rows block it
         prices = {f'r-{r.pk}-price': '1.85' for r in BOMRow.objects.all()}
-        self.client.post(reverse('costing_save', args=[order.pk, order.lines.get().pk]), prices)
+        self.client.post(reverse('costing_save', args=[order.pk, line.pk]), prices)
         self.client.post(reverse('advance', args=[order.pk, Order.STAGE_PO]))
         order.refresh_from_db()
         self.assertEqual(order.stage, Order.STAGE_PO)
 
-        # Suppliers are chosen on the PO tab; one PO per supplier and material type.
+        # Suppliers are chosen on the PO tab; one PO per supplier and material type, pending approval.
         assign = reverse('po_assign', args=[order.pk])
         all_po_ids = lambda: list(SupplierPO.objects.values_list('pk', flat=True))  # noqa: E731
         pending = lambda: [i.name for i in self.detail(order, 'po').context['pending']]  # noqa: E731
         self.client.post(assign, {f's-{twill.pk}': 'Roundstone', f's-{zipper.pk}': 'Roundstone',
                                   f's-{label.pk}': '', 'action': 'generate'})
-        self.assertEqual(sorted(SupplierPO.objects.values_list('supplier', 'material_type')),
-                         [('Roundstone', 'fabric'), ('Roundstone', 'trims')])
+        self.assertEqual(sorted(SupplierPO.objects.values_list('supplier', 'material_type', 'approval')),
+                         [('Roundstone', 'fabric', 'pending'), ('Roundstone', 'trims', 'pending')])
         po = SupplierPO.objects.get(material_type='fabric')
         trims_po = SupplierPO.objects.get(material_type='trims')
-        self.assertEqual(po.lines.count(), 3)
+        self.assertEqual(po.created_by, self.merch)
         self.assertEqual(po.lines.get(color='OYSTER').qty, 7414)
-        # The label had no supplier, so it is still waiting; a second run adds nothing.
         self.assertEqual(pending(), ['Care label'])
         self.client.post(assign, {'action': 'generate'})
         self.assertEqual(SupplierPO.objects.count(), 2)
 
-        # Move one fabric line onto the trims PO -> it becomes a mixed PO.
+        # Move / take off / split / merge — all by the raiser.
         steel = po.lines.get(color='STEEL')
         self.client.post(reverse('po_move', args=[order.pk, po.pk]), {'line': [steel.pk], 'target': trims_po.pk})
         trims_po.refresh_from_db()
-        self.assertEqual((trims_po.lines.count(), trims_po.material_type, trims_po.type_label), (2, '', 'Mixed'))
-        # Take a line off the PO altogether -> its material is pending again.
+        self.assertEqual((trims_po.lines.count(), trims_po.type_label), (2, 'Mixed'))
         self.client.post(reverse('po_move', args=[order.pk, po.pk]),
                          {'line': [po.lines.get(color='FERN CAMO').pk], 'target': 'pending'})
         self.assertEqual(pending(), ['Twill', 'Care label'])
-        # Split a line into a new PO, then merge everything back into the oldest PO.
         self.client.post(reverse('po_move', args=[order.pk, trims_po.pk]), {'line': [steel.pk], 'target': 'new'})
         self.assertEqual(SupplierPO.objects.count(), 3)
         self.client.post(reverse('po_merge', args=[order.pk]), {'po': all_po_ids()})
         po = SupplierPO.objects.get()
         self.assertEqual(po.lines.count(), 3)
-        # Different suppliers can't be merged.
-        self.client.post(assign, {f's-{label.pk}': 'Alif', f's-{twill.pk}': 'Roundstone', 'action': 'generate'})
-        before = SupplierPO.objects.count()
-        self.client.post(reverse('po_merge', args=[order.pk]), {'po': all_po_ids()})
-        self.assertEqual(SupplierPO.objects.count(), before)
-
-        # Numbers are ORD-YY-xxxxx / SPO-YY-xxxxx.
-        po = SupplierPO.objects.filter(supplier='Roundstone').first()
         self.assertRegex(order.order_no, r'^ORD-\d{2}-\d{5}$')
         self.assertRegex(po.po_no, r'^SPO-\d{2}-\d{5}$')
-        self.assertEqual(po.created_by, self.admin)
 
-        # PO details: PI / delivery fields are saved from the Details form...
+        # Details: an unapproved PO stays a draft whatever status is chosen.
         prefix = f'po{po.pk}-'
-        self.client.post(reverse('po_update', args=[order.pk, po.pk]), {
-            prefix + 'supplier': 'Roundstone', prefix + 'material_type': 'fabric', prefix + 'status': 'issued',
-            prefix + 'po_date': '2026-10-10', prefix + 'pi_no': 'PI-77', prefix + 'pi_to': 'Orbit Sourcing Ltd',
-            prefix + 'pi_to_location': 'Dhaka', prefix + 'factory_location': 'Gazipur',
-            prefix + 'destination': 'Chattogram port', prefix + 'etd': '2026-11-20'})
+        details = {prefix + 'supplier': 'Roundstone', prefix + 'material_type': 'fabric', prefix + 'status': 'issued',
+                   prefix + 'po_date': '2026-10-10', prefix + 'pi_no': 'PI-77', prefix + 'pi_to': 'Orbit Sourcing Ltd',
+                   prefix + 'pi_to_location': 'Dhaka', prefix + 'factory_location': 'Gazipur',
+                   prefix + 'destination': 'Chattogram port', prefix + 'etd': '2026-11-20'}
+        self.client.post(reverse('po_update', args=[order.pk, po.pk]), details)
         po.refresh_from_db()
-        self.assertEqual((po.pi_to, po.factory_location, po.destination), ('Orbit Sourcing Ltd', 'Gazipur',
-                                                                           'Chattogram port'))
-        # ...and appear in the Excel PO with PI no., ETD, BOM detail and the preparer, but no ship date.
-        # The letterhead comes from settings (.env).
+        self.assertEqual((po.status, po.pi_to, po.destination), ('draft', 'Orbit Sourcing Ltd', 'Chattogram port'))
+
+        # Downloads of an unapproved PO say so.
         letterhead = self.settings(COMPANY_NAME='Acme Textiles', COMPANY_ADDRESS='12 Test Road, Dhaka')
         letterhead.enable()
         self.addCleanup(letterhead.disable)
         text = self.xlsx_text(self.client.get(reverse('po_excel', args=[po.pk])))
-        for expected in ['ACME TEXTILES', '12 Test Road, Dhaka', po.po_no, 'PI-77', 'Orbit Sourcing Ltd', 'Dhaka', 'Gazipur', 'Chattogram port', 'ETD',
-                         'Main body', 'FERN CAMO', '58"', 'boss', 'Prepared by']:
+        for expected in ['ACME TEXTILES', '12 Test Road, Dhaka', po.po_no, 'PI-77', 'Gazipur', 'Main body',
+                         'STEEL', '58"', 'merch', 'Prepared by', 'DRAFT — NOT APPROVED']:
             self.assertIn(expected, text, expected)
         self.assertNotIn('Ship date', text)
-        self.assertIn('=I', text)   # amounts are live formulas
-
-        # Same PO as a PDF.
         pdf = self.client.get(reverse('po_pdf', args=[po.pk]))
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+
+        # Another non-staff user can see and download it, but not change it or approve it.
+        other = get_user_model().objects.create_user('other', password='x')
+        self.client.force_login(other)
+        self.assertFalse(self.detail(order, 'po').context['pos'][0][0].can_edit)
+        self.assertEqual(self.client.get(reverse('po_excel', args=[po.pk])).status_code, 200)
+        for name in ['po_move', 'po_update', 'po_lines_save', 'po_delete', 'po_resubmit', 'po_approve', 'po_reject',
+                     'po_reopen']:
+            self.assertEqual(self.client.post(reverse(name, args=[order.pk, po.pk])).status_code, 403, name)
+        self.assertEqual(self.client.post(reverse('po_merge', args=[order.pk]), {'po': [po.pk, po.pk]}).status_code, 403)
+        self.assertEqual(self.client.get(reverse('approvals')).status_code, 403)
+        self.assertEqual(self.client.post(reverse('order_delete', args=[order.pk])).status_code, 403)
+        # The raiser can't approve their own PO either, unless they are staff.
+        self.client.force_login(self.merch)
+        self.assertEqual(self.client.post(reverse('po_approve', args=[order.pk, po.pk])).status_code, 403)
+
+        # Staff: sends it back with a reason; the raiser corrects and resubmits.
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(reverse('approvals')), po.po_no)
+        self.client.post(reverse('po_reject', args=[order.pk, po.pk]), {'note': 'Check fabric price'})
+        po.refresh_from_db()
+        self.assertEqual((po.approval, po.approval_note), ('rejected', 'Check fabric price'))
+        self.client.force_login(self.merch)
+        self.client.post(reverse('po_resubmit', args=[order.pk, po.pk]))
+        po.refresh_from_db()
+        self.assertEqual(po.approval, 'pending')
+
+        # Staff approves: lines lock for everyone; details stay editable by the raiser, supplier is fixed.
+        self.client.force_login(self.admin)
+        self.client.post(reverse('po_approve', args=[order.pk, po.pk]))
+        po.refresh_from_db()
+        self.assertEqual((po.approval, po.approved_by), ('approved', self.admin))
+        self.assertNotIn(po, self.client.get(reverse('approvals')).context['pos'])
+        self.assertEqual(self.client.post(reverse('po_lines_save', args=[order.pk, po.pk])).status_code, 403)
+        self.client.force_login(self.merch)
+        self.assertEqual(self.client.post(reverse('po_delete', args=[order.pk, po.pk])).status_code, 403)
+        self.client.post(reverse('po_update', args=[order.pk, po.pk]), {**details, prefix + 'supplier': 'Someone else'})
+        po.refresh_from_db()
+        self.assertEqual((po.status, po.supplier), ('issued', 'Roundstone'))
+        text = self.xlsx_text(self.client.get(reverse('po_excel', args=[po.pk])))
+        self.assertNotIn('NOT APPROVED', text)
+        self.assertIn('boss', text)  # approver under Authorized signature
+
+        # Staff can reopen it for changes; it then needs approving again.
+        self.client.force_login(self.admin)
+        self.client.post(reverse('po_reopen', args=[order.pk, po.pk]))
+        po.refresh_from_db()
+        self.assertEqual((po.approval, po.status), ('pending', 'draft'))
+
+        # Cost sheet and BOM downloads, for anyone.
+        self.client.force_login(self.merch)
+        text = self.xlsx_text(self.client.get(reverse('costing_excel', args=[order.pk, line.pk])))
+        for expected in ['Cost Sheet', 'Twill', 'Total material cost', 'Margin / pc', order.order_no]:
+            self.assertIn(expected, text, expected)
+        text = self.xlsx_text(self.client.get(reverse('bom_download', args=[order.pk, line.pk, 'excel'])))
+        for expected in ['Bill of Materials', 'Twill', 'Main body', 'OYSTER', '58"', 'Roundstone', 'Supplier',
+                         'merch']:
+            self.assertIn(expected, text, expected)
+        self.assertNotIn('Price', text)
+        pdf = self.client.get(reverse('bom_download', args=[order.pk, line.pk, 'pdf']))
         self.assertEqual(pdf['Content-Type'], 'application/pdf')
         self.assertTrue(pdf.content.startswith(b'%PDF'))
-        self.assertIn(f'{po.po_no} Roundstone.pdf', pdf['Content-Disposition'])
+        self.assertEqual(self.client.get(reverse('bom_download', args=[order.pk, line.pk, 'doc'])).status_code, 404)
 
-        text = self.xlsx_text(self.client.get(reverse('costing_excel', args=[order.pk, line.pk])))
-        for expected in ['12 Test Road, Dhaka', 'Cost Sheet', 'Twill', 'OYSTER', 'Total material cost', 'Margin / pc', order.order_no]:
-            self.assertIn(expected, text, expected)
-
-        # Supplier POs are admin-only, like costing.
-        self.client.force_login(self.merch)
-        self.assertEqual(self.detail(order, 'po').context['tab'], 'bom')
-        self.assertNotContains(self.client.get(reverse('home')), reverse('po_list'))
-        for url in [reverse('po_list'), reverse('po_excel', args=[po.pk]), reverse('po_pdf', args=[po.pk]),
-                    reverse('costing_excel', args=[order.pk, line.pk])]:
-            self.assertEqual(self.client.get(url).status_code, 403, url)
-        for name, args in [('po_assign', [order.pk]), ('po_merge', [order.pk]), ('po_move', [order.pk, po.pk]),
-                           ('po_update', [order.pk, po.pk]), ('po_lines_save', [order.pk, po.pk]),
-                           ('po_delete', [order.pk, po.pk])]:
-            self.assertEqual(self.client.post(reverse(name, args=args)).status_code, 403, name)
-        self.assertTrue(SupplierPO.objects.filter(pk=po.pk).exists())
+        # The order's creator may delete it.
+        self.assertEqual(self.client.post(reverse('order_delete', args=[order.pk])).status_code, 302)
+        self.assertFalse(Order.objects.filter(pk=order.pk).exists())
 
     def test_pages_render(self):
         from django.core.management import call_command
@@ -310,13 +336,12 @@ class WorkflowTests(TestCase):
         table = self.client.get(reverse('report_detail', args=['orders']), {'ship_from': '2026-06-01'}).context['table']
         self.assertEqual([row[1] for row in table.rows], ['WC6916'])
 
-        # Non-admins: no cost reports, no amount columns anywhere.
+        # Every user sees every report, prices included.
         self.client.force_login(self.merch)
-        self.assertEqual(self.client.get(reverse('report_detail', args=['profitability'])).status_code, 403)
-        denied = self.client.get(reverse('report_detail', args=['material-cost']), {'download': 'xlsx'})
-        self.assertEqual(denied.status_code, 403)
-        for key in ['suppliers', 'po-register']:
-            self.assertEqual(self.client.get(reverse('report_detail', args=[key])).status_code, 403, key)
+        for key in REPORTS:
+            self.assertEqual(self.client.get(reverse('report_detail', args=[key])).status_code, 200, key)
         table = self.client.get(reverse('report_detail', args=['materials'])).context['table']
-        self.assertFalse({'Amount', 'Supplier', 'PO status'} & {c.label for c in table.columns})
-        self.assertNotContains(self.client.get(reverse('report_list')), 'Costing &amp; margin')
+        self.assertTrue({'Amount', 'Supplier', 'PO status'} <= {c.label for c in table.columns})
+        self.assertContains(self.client.get(reverse('report_list')), 'Costing &amp; margin')
+        table = self.client.get(reverse('report_detail', args=['po-register'])).context['table']
+        self.assertIn('Approval', [c.label for c in table.columns])

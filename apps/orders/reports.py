@@ -1,7 +1,6 @@
 """Reports: each one turns the filtered orders into a plain table (columns +
 rows + totals) that is shown on screen and downloaded as Excel or CSV from
-the same data. Columns and reports marked admin-only carry prices/costs and
-are left out for everyone else."""
+the same data."""
 
 import csv
 import datetime
@@ -21,8 +20,8 @@ STAGE_LABELS = {1: 'Order', 2: 'Line Items', 3: 'Assortment', 4: 'BOM', 5: 'Cost
 class Col:
     """kind: text | int | qty (2 dp) | money (2 dp) | rate (4 dp) | pct | date"""
 
-    def __init__(self, label, kind='text', total=False, admin=False):
-        self.label, self.kind, self.total, self.admin = label, kind, total, admin
+    def __init__(self, label, kind='text', total=False):
+        self.label, self.kind, self.total = label, kind, total
 
     @property
     def numeric(self):
@@ -46,18 +45,6 @@ def show(value, kind):
 class Table:
     def __init__(self, columns, rows, chart=None):
         self.columns, self.rows, self.chart = columns, rows, chart
-
-    def for_user(self, admin):
-        """Drop admin-only columns for non-admins."""
-        if admin:
-            return self
-        keep = [i for i, col in enumerate(self.columns) if not col.admin]
-        chart = self.chart
-        if chart and (chart[0] not in keep or chart[1] not in keep):
-            chart = None
-        elif chart:
-            chart = (keep.index(chart[0]), keep.index(chart[1]))
-        return Table([self.columns[i] for i in keep], [[row[i] for i in keep] for row in self.rows], chart)
 
     @property
     def totals(self):
@@ -182,8 +169,8 @@ def shipment_plan(orders):
 def material_requirement(orders):
     types = dict(MATERIAL_TYPES)
     cols = [Col('Buyer PO'), Col('Style'), Col('Type'), Col('Item'), Col('Placement'), Col('Rows', 'int'),
-            Col('Total req.', 'qty'), Col('Unit'), Col('Supplier', admin=True), Col('PO status', admin=True),
-            Col('Amount', 'money', total=True, admin=True)]
+            Col('Total req.', 'qty'), Col('Unit'), Col('Supplier'), Col('PO status'),
+            Col('Amount', 'money', total=True)]
     rows = []
     for o in orders:
         for line in o.lines.all():
@@ -230,7 +217,8 @@ def profitability(orders):
 
 
 def _pos_for(orders):
-    return (SupplierPO.objects.filter(order__in=orders).select_related('order').prefetch_related('lines')
+    return (SupplierPO.objects.filter(order__in=orders).select_related('order', 'created_by', 'approved_by')
+            .prefetch_related('lines')
             .order_by('supplier', 'id'))
 
 
@@ -246,7 +234,7 @@ def supplier_summary(orders):
         g['amount'] += po.total_amount
     cols = [Col('Supplier'), Col('Types'), Col('POs', 'int', total=True), Col('Lines', 'int', total=True),
             Col('Open POs', 'int', total=True), Col('Received', 'int', total=True),
-            Col('PO amount', 'money', total=True, admin=True)]
+            Col('PO amount', 'money', total=True)]
     rows = [[supplier, ', '.join(sorted(g['types'])), g['pos'], g['lines'], g['open'], g['received'], g['amount']]
             for supplier, g in groups.items()]
     return Table(cols, rows, chart=(0, 6))
@@ -255,36 +243,38 @@ def supplier_summary(orders):
 def po_register(orders):
     cols = [Col('PO no.'), Col('Supplier'), Col('Type'), Col('Buyer PO'), Col('Buyer'), Col('PO date', 'date'),
             Col('Delivery', 'date'), Col('PI no.'), Col('LC no.'), Col('ETD', 'date'), Col('ETA', 'date'),
-            Col('Status'), Col('Lines', 'int', total=True), Col('Amount', 'money', total=True, admin=True)]
+            Col('Status'), Col('Approval'), Col('Raised by'), Col('Approved by'), Col('Lines', 'int', total=True),
+            Col('Amount', 'money', total=True)]
     rows = [[po.po_no, po.supplier, po.type_label, po.order.po_number, po.order.buyer, po.po_date, po.delivery_date,
-             po.pi_no, po.lc_no, po.etd, po.eta, po.get_status_display(), len(po.lines.all()), po.total_amount]
+             po.pi_no, po.lc_no, po.etd, po.eta, po.get_status_display(), po.get_approval_display(), po.creator_name,
+             po.approver_name, len(po.lines.all()), po.total_amount]
             for po in _pos_for(orders)]
     return Table(cols, rows)
 
 
-# key -> (title, what it answers, icon, admin only, builder)
+# key -> (title, what it answers, icon, builder)
 REPORTS = OrderedDict([
     ('orders', ('Order register', 'Every order with qty, value, ship date and how far it has progressed.',
-                'bi-clipboard-data', False, order_register)),
-    ('buyers', ('Buyer summary', 'Orders, pieces and value per buyer.', 'bi-people', False, buyer_summary)),
+                'bi-clipboard-data', order_register)),
+    ('buyers', ('Buyer summary', 'Orders, pieces and value per buyer.', 'bi-people', buyer_summary)),
     ('shipments', ('Shipment plan', 'Orders, pieces and value shipping each month, and what is overdue.',
-                   'bi-calendar-week', False, shipment_plan)),
+                   'bi-calendar-week', shipment_plan)),
     ('materials', ('Material requirement', 'Every BOM material with its type and total requirement.',
-                   'bi-diagram-3', False, material_requirement)),
+                   'bi-diagram-3', material_requirement)),
     ('suppliers', ('Supplier summary', 'POs per supplier: how many, which types, open vs received.',
-                   'bi-building', True, supplier_summary)),
-    ('po-register', ('Supplier PO register', 'Every supplier PO with PI, LC, ETD, ETA and status.',
-                     'bi-truck', True, po_register)),
+                   'bi-building', supplier_summary)),
+    ('po-register', ('Supplier PO register', 'Every supplier PO with PI, LC, ETD, ETA, status and approval.',
+                     'bi-truck', po_register)),
     ('profitability', ('Costing & margin', 'Cost per piece against FOB and the margin for every style.',
-                       'bi-graph-up-arrow', True, profitability)),
+                       'bi-graph-up-arrow', profitability)),
     ('material-cost', ('Material cost by type', 'What each order spends on fabric, trims, labels and packing.',
-                       'bi-pie-chart', True, material_cost_by_type)),
+                       'bi-pie-chart', material_cost_by_type)),
 ])
 
 
-def build(key, filters, admin):
-    builder = REPORTS[key][4]
-    return builder(filtered_orders(filters)).for_user(admin)
+def build(key, filters):
+    builder = REPORTS[key][3]
+    return builder(filtered_orders(filters))
 
 
 # --------------------------------------------------------------------------

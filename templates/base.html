@@ -20,14 +20,15 @@
     <div class="collapse navbar-collapse" id="topNav">
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'order_detail' %}active{% endif %}" href="{% url 'home' %}"><i class="bi bi-clipboard-check"></i> Orders</a></li>
-        {% if user.is_staff %}<li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'po_list' %}active{% endif %}" href="{% url 'po_list' %}"><i class="bi bi-truck"></i> Supplier PO</a></li>{% endif %}
+        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'po_list' %}active{% endif %}" href="{% url 'po_list' %}"><i class="bi bi-truck"></i> Supplier PO</a></li>
+        {% if user.is_staff %}<li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'approvals' %}active{% endif %}" href="{% url 'approvals' %}"><i class="bi bi-check2-square"></i> Approvals{% if pending_approvals %} <span class="badge erp-badge-admin">{{ pending_approvals }}</span>{% endif %}</a></li>{% endif %}
         <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'report_list' or request.resolver_match.url_name == 'report_detail' %}active{% endif %}" href="{% url 'report_list' %}"><i class="bi bi-bar-chart-line"></i> Reports</a></li>
       </ul>
       <ul class="navbar-nav ms-auto align-items-md-center">
         <li class="nav-item">
           <span class="nav-link">
             <i class="bi bi-person-circle"></i> {{ user.get_full_name|default:user.username }}
-            {% if user.is_staff %}<span class="badge erp-badge-admin">Admin</span>{% endif %}
+            {% if user.is_staff %}<span class="badge erp-badge-admin">Staff</span>{% endif %}
           </span>
         </li>
         <li class="nav-item">

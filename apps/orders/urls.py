@@ -18,6 +18,7 @@ urlpatterns = [
 
     path('orders/<int:pk>/lines/<int:line_id>/bom/add/', views.bom_item_add, name='bom_item_add'),
     path('orders/<int:pk>/lines/<int:line_id>/bom/save/', views.bom_save, name='bom_save'),
+    path('orders/<int:pk>/lines/<int:line_id>/bom/<str:fmt>/', views.bom_download, name='bom_download'),
     path('orders/<int:pk>/bom/<int:item_id>/delete/', views.bom_item_delete, name='bom_item_delete'),
 
     path('orders/<int:pk>/lines/<int:line_id>/costing/', views.costing_save, name='costing_save'),
@@ -31,8 +32,13 @@ urlpatterns = [
     path('orders/<int:pk>/po/<int:po_id>/update/', views.po_update, name='po_update'),
     path('orders/<int:pk>/po/<int:po_id>/lines/', views.po_lines_save, name='po_lines_save'),
     path('orders/<int:pk>/po/<int:po_id>/delete/', views.po_delete, name='po_delete'),
+    path('orders/<int:pk>/po/<int:po_id>/approve/', views.po_approve, name='po_approve'),
+    path('orders/<int:pk>/po/<int:po_id>/reject/', views.po_reject, name='po_reject'),
+    path('orders/<int:pk>/po/<int:po_id>/reopen/', views.po_reopen, name='po_reopen'),
+    path('orders/<int:pk>/po/<int:po_id>/resubmit/', views.po_resubmit, name='po_resubmit'),
 
     path('supplier-po/', views.po_list, name='po_list'),
+    path('approvals/', views.approvals, name='approvals'),
     path('reports/', views.report_list, name='report_list'),
     path('reports/<slug:key>/', views.report_detail, name='report_detail'),
     path('supplier-po/<int:po_id>/excel/', views.po_excel, name='po_excel'),

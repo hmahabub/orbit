@@ -1,0 +1,47 @@
+{# Approval bar for one supplier PO. Needs: po, user, next (URL to come back to). #}
+<div class="approval-bar approval-{{ po.approval }}">
+  <div>
+    {% if po.approval == 'approved' %}
+      <i class="bi bi-check-circle-fill"></i> <b>Approved</b>{% if po.approver_name %} by {{ po.approver_name }}{% endif %}{% if po.approved_at %} on {{ po.approved_at|date:"d M Y" }}{% endif %}
+      <span class="text-muted"> · lines locked</span>
+    {% elif po.approval == 'rejected' %}
+      <i class="bi bi-x-circle-fill"></i> <b>Sent back</b> — {{ po.approval_note }}
+    {% else %}
+      <i class="bi bi-hourglass-split"></i> <b>Pending approval</b>
+    {% endif %}
+    <span class="text-muted">· raised by {{ po.creator_name|default:"—" }} on {{ po.created_at|date:"d M Y" }}</span>
+  </div>
+  <div class="d-flex gap-1 no-print">
+    {% if user.is_staff %}
+      {% if po.approval == 'approved' %}
+        <form method="post" action="{% url 'po_reopen' po.order_id po.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+          <button class="btn btn-sm btn-outline-secondary" data-confirm="Reopen {{ po.po_no }} for changes? It will need approving again."><i class="bi bi-unlock"></i> Reopen</button></form>
+      {% else %}
+        <form method="post" action="{% url 'po_approve' po.order_id po.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+          <button class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Approve</button></form>
+        {% if po.approval == 'pending' %}
+        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejectModal{{ po.pk }}"><i class="bi bi-x-lg"></i> Reject</button>
+        {% endif %}
+      {% endif %}
+    {% endif %}
+    {% if po.approval == 'rejected' and po.can_edit %}
+      <form method="post" action="{% url 'po_resubmit' po.order_id po.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-send"></i> Send for approval again</button></form>
+    {% endif %}
+  </div>
+</div>
+{% if user.is_staff and po.approval == 'pending' %}
+<div class="modal fade" id="rejectModal{{ po.pk }}" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <form method="post" action="{% url 'po_reject' po.order_id po.pk %}">
+      {% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+      <div class="modal-header"><h5 class="modal-title">Send {{ po.po_no }} back</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <label class="form-label" for="note{{ po.pk }}">What needs to change? <span class="text-danger">*</span></label>
+        <textarea class="form-control" id="note{{ po.pk }}" name="note" rows="3" required></textarea>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger"><i class="bi bi-x-lg"></i> Send back</button></div>
+    </form>
+  </div></div>
+</div>
+{% endif %}

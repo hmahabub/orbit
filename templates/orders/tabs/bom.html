@@ -12,7 +12,11 @@
 <div class="erp-card mb-3">
   <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
     <h2 class="card-title-sm mb-0"><i class="bi bi-diagram-3"></i> Material allocation (BOM) — {{ line.style }}</h2>
-    {% if items %}<button class="btn btn-sm btn-erp-primary" form="bomForm"><i class="bi bi-save"></i> Save BOM</button>{% endif %}
+    <div class="d-flex gap-1">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'bom_download' order.pk line.pk 'excel' %}" title="Download this BOM as Excel (uses saved values)"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'bom_download' order.pk line.pk 'pdf' %}" title="Download this BOM as PDF (uses saved values)"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+      {% if items %}<button class="btn btn-sm btn-erp-primary" form="bomForm"><i class="bi bi-save"></i> Save BOM</button>{% endif %}
+    </div>
   </div>
   <div class="table-responsive">
     <table class="table sheet mb-0">

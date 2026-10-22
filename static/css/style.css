@@ -222,3 +222,16 @@ body.has-unsaved main { padding-bottom: 5rem !important; }
   box-shadow: 0 0 0 .2rem rgba(232,163,61,.35);
 }
 @media (prefers-reduced-motion: reduce) { .unsaved-bar { transition: none; } }
+
+/* ---------- Supplier PO approval ---------- */
+.approval-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem;
+  padding: .45rem 1rem; font-size: .86rem; border-bottom: 1px solid var(--erp-border); }
+.approval-pending { background: #fff7e6; }
+.approval-pending i { color: var(--erp-amber); }
+.approval-approved { background: #eaf6ee; }
+.approval-approved i { color: var(--erp-green); }
+.approval-rejected { background: #fdecea; }
+.approval-rejected i { color: var(--erp-red); }
+.approval-badge-pending { background: var(--erp-amber); color: var(--erp-navy); }
+.approval-badge-approved { background: var(--erp-green); }
+.approval-badge-rejected { background: var(--erp-red); }

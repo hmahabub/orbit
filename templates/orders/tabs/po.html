@@ -42,9 +42,9 @@
 {% endif %}
 
 {# ---- 2. The POs ---- #}
-{% if pos|length > 1 %}
+{% if movable_targets|length > 1 %}
 <div class="continue-bar mb-3">
-  <span class="text-muted small"><i class="bi bi-union"></i> To merge POs of the same supplier, tick them below and merge. To split or rearrange, tick lines inside a PO and move them.</span>
+  <span class="text-muted small"><i class="bi bi-union"></i> To merge POs of the same supplier, tick them below and merge. To split or rearrange, tick lines inside a PO and move them. Only POs you raised that are not approved yet can be changed.</span>
   <button class="btn btn-sm btn-outline-primary" form="mergeForm" data-confirm="Merge the ticked POs into one?"><i class="bi bi-union"></i> Merge ticked POs</button>
 </div>
 <form id="mergeForm" method="post" action="{% url 'po_merge' order.pk %}">{% csrf_token %}</form>
@@ -54,7 +54,7 @@
 <div class="erp-card mb-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 border-bottom">
     <div class="d-flex align-items-start gap-2">
-      {% if pos|length > 1 %}<input type="checkbox" class="form-check-input mt-2" name="po" value="{{ po.pk }}" form="mergeForm" title="Tick to merge">{% endif %}
+      {% if movable_targets|length > 1 and po.can_edit %}<input type="checkbox" class="form-check-input mt-2" name="po" value="{{ po.pk }}" form="mergeForm" title="Tick to merge">{% endif %}
       <div>
         <span class="fw-bold fs-5">{{ po.po_no }}</span>
         <span class="ms-2 fs-6">{{ po.supplier }}</span>
@@ -70,60 +70,76 @@
       </div>
     </div>
     <div class="d-flex gap-1">
-      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#poModal{{ po.pk }}"><i class="bi bi-pencil"></i> Details</button>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download this PO as Excel (uses saved quantities)"><i class="bi bi-file-earmark-excel"></i> Excel</a>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_pdf' po.pk %}" title="Download this PO as PDF (uses saved quantities)"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
-      <button class="btn btn-sm btn-outline-danger" form="pod{{ po.pk }}" data-confirm="Delete {{ po.po_no }}? Its materials go back to the not-ordered list."><i class="bi bi-trash"></i></button>
+      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#poModal{{ po.pk }}"><i class="bi bi-{% if po.can_edit_details %}pencil{% else %}eye{% endif %}"></i> Details</button>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download this PO as Excel (uses saved values)"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_pdf' po.pk %}" title="Download this PO as PDF (uses saved values)"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+      {% if po.can_edit %}<button class="btn btn-sm btn-outline-danger" form="pod{{ po.pk }}" data-confirm="Delete {{ po.po_no }}? Its materials go back to the not-ordered list."><i class="bi bi-trash"></i></button>{% endif %}
     </div>
   </div>
+  {% include "orders/_po_approval.html" with next=request.get_full_path %}
   <div class="table-responsive">
     <table class="table table-sm mb-0 align-middle po-lines">
-      <thead><tr><th style="width:32px"><input type="checkbox" class="form-check-input check-all" title="Tick all lines"></th><th>#</th><th>Style</th><th>Item</th><th>Color</th><th>Size / spec</th><th class="text-end" style="width:130px">Qty</th><th>Unit</th>
-        {% if is_admin %}<th class="text-end" style="width:120px">Price</th><th class="text-end">Amount</th>{% endif %}</tr></thead>
+      <thead><tr>{% if po.can_edit %}<th style="width:32px"><input type="checkbox" class="form-check-input check-all" title="Tick all lines"></th>{% endif %}<th>#</th><th>Style</th><th>Item</th><th>Color</th><th>Size / spec</th><th class="text-end" style="width:130px">Qty</th><th>Unit</th>
+        <th class="text-end" style="width:120px">Price</th><th class="text-end">Amount</th></tr></thead>
       <tbody>
       {% for l in po.lines.all %}
         <tr>
-          <td><input type="checkbox" class="form-check-input" name="line" value="{{ l.pk }}" form="pom{{ po.pk }}"></td>
+          {% if po.can_edit %}<td><input type="checkbox" class="form-check-input" name="line" value="{{ l.pk }}" form="pom{{ po.pk }}"></td>{% endif %}
           <td class="text-muted">{{ forloop.counter }}</td><td>{{ l.style }}</td><td>{{ l.description }}</td><td>{{ l.color }}</td><td>{{ l.spec }}</td>
+          {% if po.can_edit %}
           <td><input class="form-control form-control-sm text-end" type="number" step="any" min="0" name="l-{{ l.pk }}-qty" value="{{ l.qty|plain }}" form="pol{{ po.pk }}"></td>
           <td>{{ l.unit }}</td>
-          {% if is_admin %}
           <td><input class="form-control form-control-sm text-end" type="number" step="any" min="0" name="l-{{ l.pk }}-price" value="{{ l.price|plain }}" form="pol{{ po.pk }}"></td>
-          <td class="text-end">{{ l.amount|num:2 }}</td>
+          {% else %}
+          <td class="text-end">{{ l.qty|num:0 }}</td>
+          <td>{{ l.unit }}</td>
+          <td class="text-end">{{ l.price|num:4 }}</td>
           {% endif %}
+          <td class="text-end">{{ l.amount|num:2 }}</td>
         </tr>
       {% endfor %}
       </tbody>
       <tfoot><tr>
+        {% if po.can_edit %}
         <td colspan="6">
           <div class="d-flex align-items-center gap-1">
             <span class="small text-muted text-nowrap">Move ticked lines to</span>
             <select class="form-select form-select-sm" name="target" form="pom{{ po.pk }}" style="max-width:280px" required>
               <option value="">Choose…</option>
-              {% for other in all_pos %}{% if other.pk != po.pk %}<option value="{{ other.pk }}">{{ other.po_no }} — {{ other.supplier }} ({{ other.type_label }})</option>{% endif %}{% endfor %}
+              {% for other in movable_targets %}{% if other.pk != po.pk %}<option value="{{ other.pk }}">{{ other.po_no }} — {{ other.supplier }} ({{ other.type_label }})</option>{% endif %}{% endfor %}
               <option value="new">A new PO for {{ po.supplier }}</option>
               <option value="pending">Not ordered (take off this PO)</option>
             </select>
             <button class="btn btn-sm btn-outline-secondary" form="pom{{ po.pk }}"><i class="bi bi-arrow-left-right"></i> Move</button>
           </div>
         </td>
-        <td colspan="{% if is_admin %}3{% else %}2{% endif %}" class="text-end">
-          <button class="btn btn-sm btn-outline-primary" form="pol{{ po.pk }}"><i class="bi bi-save"></i> Save quantities</button>
+        <td colspan="3" class="text-end">
+          <button class="btn btn-sm btn-outline-primary" form="pol{{ po.pk }}"><i class="bi bi-save"></i> Save lines</button>
         </td>
-        {% if is_admin %}<td class="text-end fw-bold">{{ po.total_amount|num:2 }}</td>{% endif %}
+        {% else %}
+        <td colspan="8" class="text-end small text-muted">
+          <i class="bi bi-lock"></i>
+          {% if po.is_approved %}Approved — {% if user.is_staff %}reopen it to change lines.{% else %}a staff user can reopen it for changes.{% endif %}
+          {% else %}Raised by {{ po.creator_name|default:"someone else" }} — only they or a staff user can change it.{% endif %}
+        </td>
+        {% endif %}
+        <td class="text-end fw-bold">{{ po.total_amount|num:2 }}</td>
       </tr></tfoot>
     </table>
   </div>
 </div>
-<form id="pol{{ po.pk }}" data-save-label="Save {{ po.po_no }} quantities" method="post" action="{% url 'po_lines_save' order.pk po.pk %}">{% csrf_token %}</form>
+{% if po.can_edit %}
+<form id="pol{{ po.pk }}" data-save-label="Save {{ po.po_no }} lines" method="post" action="{% url 'po_lines_save' order.pk po.pk %}">{% csrf_token %}</form>
 <form id="pom{{ po.pk }}" method="post" action="{% url 'po_move' order.pk po.pk %}">{% csrf_token %}</form>
 <form id="pod{{ po.pk }}" method="post" action="{% url 'po_delete' order.pk po.pk %}">{% csrf_token %}</form>
+{% endif %}
 
 <div class="modal fade" id="poModal{{ po.pk }}" tabindex="-1">
   <div class="modal-dialog modal-lg"><div class="modal-content">
     <form method="post" action="{% url 'po_update' order.pk po.pk %}">
       {% csrf_token %}
       <div class="modal-header"><h5 class="modal-title">{{ po.po_no }} details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <fieldset {% if not po.can_edit_details %}disabled{% endif %}>
       <div class="modal-body"><div class="row g-3">
         {% include "orders/_field.html" with field=f.supplier cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.material_type cls="col-md-3" %}
@@ -139,8 +155,12 @@
         {% include "orders/_field.html" with field=f.etd cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.eta cls="col-md-6" %}
         {% include "orders/_field.html" with field=f.notes cls="col-12" %}
-      </div></div>
-      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-erp-primary"><i class="bi bi-save"></i> Save</button></div>
+      </div>
+      {% if po.is_approved %}<div class="form-text mt-2">Supplier and type are fixed once approved.</div>
+      {% else %}<div class="form-text mt-2">Status stays Draft until a staff user approves this PO.</div>{% endif %}
+      </div>
+      </fieldset>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% if po.can_edit_details %}Cancel{% else %}Close{% endif %}</button>{% if po.can_edit_details %}<button class="btn btn-erp-primary"><i class="bi bi-save"></i> Save</button>{% endif %}</div>
     </form>
   </div></div>
 </div>

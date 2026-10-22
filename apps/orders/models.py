@@ -352,6 +352,14 @@ class SupplierPO(models.Model):
                                    related_name='supplier_pos')
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Approval: a staff user approves every PO. An approved PO's lines are locked.
+    APPROVAL_CHOICES = [('pending', 'Pending approval'), ('approved', 'Approved'), ('rejected', 'Rejected')]
+    approval = models.CharField(max_length=10, choices=APPROVAL_CHOICES, default='pending')
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name='approved_supplier_pos')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approval_note = models.TextField(blank=True)
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Supplier PO'
@@ -362,6 +370,28 @@ class SupplierPO(models.Model):
     @property
     def type_label(self):
         return self.get_material_type_display() or 'Mixed'
+
+    @property
+    def is_approved(self):
+        return self.approval == 'approved'
+
+    @property
+    def approver_name(self):
+        user = self.approved_by
+        return (user.get_full_name() or user.username) if user else ''
+
+    @property
+    def creator_name(self):
+        user = self.created_by
+        return (user.get_full_name() or user.username) if user else ''
+
+    def editable_by(self, user):
+        """The raiser (or any staff user) may change a PO's lines until it is approved."""
+        return not self.is_approved and self.details_editable_by(user)
+
+    def details_editable_by(self, user):
+        """Dates, PI/LC and delivery details stay editable after approval."""
+        return user.is_staff or user.is_superuser or (self.created_by_id is not None and self.created_by_id == user.id)
 
     @property
     def po_no(self):

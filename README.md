@@ -13,25 +13,24 @@ The six steps are tabs on one order page. Each tab unlocks when the one before i
 | **1. Order** | Buyer PO, buyer, factory, ship date, status | Created |
 | **2. Line Items** | Styles on the PO: style, description, qty, price/pc | At least one line exists |
 | **3. Assortment** | Color × size breakdown per style. Pick **letter sizes** (S, M, L, XL, XXL, 3XL, 4XL, 5XL) or **number sizes** (30–44) | Every style's breakdown adds up to its line qty |
-| **4. BOM** | Excel-style sheet per style: type, item, placement, color, size, consumption/pc ⇄ total req. **No prices, no suppliers** | Every style has materials |
-| **5. Costing** | **Admin only.** Price per BOM row, CM/other costs, cost/pc vs FOB, margin per style | Every BOM row has a price |
-| **6. Supplier PO** | Choose a supplier per material, then generate one PO per supplier and material type. Move lines between POs, merge POs, PI/LC/ETD/ETA and delivery details, Excel and PDF PO | — |
+| **4. BOM** | Excel-style sheet per style: type, item, placement, color, size, consumption/pc ⇄ total req. No prices or suppliers. Excel and PDF download | Every style has materials |
+| **5. Costing** | Price per BOM row, CM/other costs, cost/pc vs FOB, margin per style | Every BOM row has a price |
+| **6. Supplier PO** | Choose a supplier per material, then generate one PO per supplier and material type. Staff approve each PO. Move lines between POs, merge POs, PI/LC/ETD/ETA and delivery details, Excel and PDF PO | — |
 
 After login, users land on the list of **running orders**.
 
 Buyer, factory, supplier and material names are typed in directly. There are no master-data modules. Fields autocomplete from values entered before.
 
-## Who sees prices
+## Users and approvals
 
-An **admin** is a user with *staff status* (set in Django admin → Users). Only admins can:
+Every user can use every part of Orbit: orders, assortment, BOM, costing and prices, supplier POs, and all reports.
 
-- open the Costing tab, enter prices and download the cost sheet
-- open the Supplier PO tab and the Supplier PO list, and download POs
-- open the supplier and costing reports
-- complete the Costing step
-- delete orders
+Two rules sit on top of that:
 
-Other users can do everything else. Buyer order price (FOB/pc) is visible to everyone on the Line Items tab.
+- **Supplier POs need staff approval.** A *staff* user is one with *staff status* (set in Django admin → Users). New POs start as **Pending approval**. Staff approve them, or send them back with a note, from the PO or from the **Approvals** page. The Approvals page sits in the top menu, with a count of waiting POs. The raiser corrects a PO that was sent back and sends it for approval again. Until a PO is approved, its status stays *Draft* and its Excel/PDF are marked **DRAFT — NOT APPROVED**. Once approved, the approver's name appears under *Authorized signature*.
+- **A PO belongs to whoever raised it.** Only that user, or a staff user, can change its lines, move or merge its lines, or delete it. Once a PO is approved its lines are locked for everyone; a staff user can **Reopen** it, after which it needs approving again. Dates, PI/LC and delivery details stay editable by the raiser after approval. The supplier and type do not.
+
+POs raised before approvals existed count as approved. Those with no recorded raiser can only be changed by staff. An order can be deleted by the user who created it, or by staff.
 
 ## BOM allocation
 
@@ -62,7 +61,7 @@ Order numbers read **ORD-YY-xxxxx** and PO numbers **SPO-YY-xxxxx**: the year it
 
 A PO's **Details** hold the supplier, type, status, dates, PI no., LC no., PI to, PI to location, factory location, destination, ETD and ETA.
 
-Each PO downloads as an **Excel** document laid out for printing (landscape, one page wide), or as a **PDF** with the same content. It shows those details, each line's placement, body color, color combination, size and spec from the BOM, and the name of the user who raised it under *Prepared by*. Amounts and the total are live formulas. The Costing tab has the same kind of Excel download for a style's cost sheet.
+Each PO downloads as an **Excel** document laid out for printing (landscape, one page wide), or as a **PDF** with the same content. It shows those details, each line's placement, body color, color combination, size and spec from the BOM, and the name of the user who raised it under *Prepared by*. Amounts and the total are live formulas. The Costing tab has the same kind of Excel download for a style's cost sheet. The BOM tab downloads a style's BOM, without prices, as Excel or PDF.
 
 ## Reports
 
@@ -73,13 +72,11 @@ The **Reports** menu has eight reports. All share one filter bar (status, buyer,
 | Order register | Every order: qty, value, ship date, status, progress |
 | Buyer summary | Orders, pieces and value per buyer |
 | Shipment plan | Orders, pieces and value per ship month, and what is overdue |
-| Material requirement | Every BOM material: type and requirement (supplier and PO status for admins) |
-| Supplier summary *(admin)* | POs per supplier: count, types, open vs received |
-| Supplier PO register *(admin)* | Every PO with PI, LC, ETD, ETA and status |
-| Costing & margin *(admin)* | Cost per piece against FOB and margin per style |
-| Material cost by type *(admin)* | Spend on fabric, trims, labels and packing per order |
-
-Non-admins do not see the four admin reports, and supplier and amount columns are left out of the others, on screen and in downloads.
+| Material requirement | Every BOM material: type, requirement, supplier, PO status |
+| Supplier summary | POs per supplier: count, types, open vs received |
+| Supplier PO register | Every PO with PI, LC, ETD, ETA, status, approval, raiser and approver |
+| Costing & margin | Cost per piece against FOB and margin per style |
+| Material cost by type | Spend on fabric, trims, labels and packing per order |
 
 ## Run it
 
@@ -98,8 +95,8 @@ Open http://127.0.0.1:8000/.
 
 | User | Password | Role |
 |---|---|---|
-| `admin` | `admin123` | Admin: sees costing and prices |
-| `merchant` | `merchant123` | Merchandiser: no prices |
+| `admin` | `admin123` | Staff: approves supplier POs |
+| `merchant` | `merchant123` | Merchandiser |
 
 Change these passwords, or create your own users with `python manage.py createsuperuser`, before real use.
 `python manage.py seed_demo --reset` wipes all orders and reloads the demo.

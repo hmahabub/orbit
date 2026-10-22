@@ -8,6 +8,7 @@ from django.db.models import Max, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from . import exports, reports
@@ -36,17 +37,34 @@ DEFAULT_COST_HEADS = ['CM', 'Washing', 'Embellishment', 'Testing', 'Commercial',
 # helpers
 # --------------------------------------------------------------------------
 
+def can_delete_order(user, order):
+    return is_staff(user) or (order.created_by_id is not None and order.created_by_id == user.id)
+
+
 def display_name(user):
     return (user.get_full_name() or user.username) if user else ''
 
 
-def is_admin(user):
+def is_staff(user):
     return user.is_staff or user.is_superuser
 
 
-def require_admin(user):
-    if not is_admin(user):
-        raise PermissionDenied('Only admins can open costing and supplier POs.')
+def require_staff(user):
+    if not is_staff(user):
+        raise PermissionDenied('Only staff users can approve supplier POs.')
+
+
+def require_po_lines(user, po):
+    """Lines, moving, merging and deleting: the PO's raiser or staff, and only before approval."""
+    if po.is_approved:
+        raise PermissionDenied(f'{po.po_no} is approved and locked.')
+    if not po.editable_by(user):
+        raise PermissionDenied(f'{po.po_no} was raised by someone else; only they or a staff user can change it.')
+
+
+def require_po_details(user, po):
+    if not po.details_editable_by(user):
+        raise PermissionDenied(f'{po.po_no} was raised by someone else; only they or a staff user can change it.')
 
 
 def to_dec(value, default=None):
@@ -74,20 +92,14 @@ def order_url(order, tab, line=None):
     return url
 
 
-ADMIN_TABS = ('costing', 'po')  # prices and suppliers: admins only
-
-
-def tab_unlocked(order, key, user):
-    if key in ADMIN_TABS and not is_admin(user):
-        return False
+def tab_unlocked(order, key):
     return order.stage >= TAB_STAGE[key]
 
 
-def tab_states(order, user):
+def tab_states(order):
     return [
         {'key': key, 'label': label, 'num': i + 1, 'icon': icon,
-         'unlocked': tab_unlocked(order, key, user), 'done': order.stage > stage,
-         'admin_locked': key in ADMIN_TABS and not is_admin(user) and order.stage >= stage}
+         'unlocked': tab_unlocked(order, key), 'done': order.stage > stage}
         for i, (key, label, stage, icon) in enumerate(TABS)
     ]
 
@@ -161,12 +173,11 @@ def order_create(request):
 def order_detail(request, pk):
     order = get_object_or_404(Order, pk=pk)
     user = request.user
-    admin = is_admin(user)
 
     tab = request.GET.get('tab')
-    if tab not in TAB_STAGE or not tab_unlocked(order, tab, user):
-        # Land on the furthest tab this user may open.
-        tab = next(k for k, _, s, _ in reversed(TABS) if tab_unlocked(order, k, user))
+    if tab not in TAB_STAGE or not tab_unlocked(order, tab):
+        # Land on the furthest tab unlocked so far.
+        tab = next(k for k, _, s, _ in reversed(TABS) if tab_unlocked(order, k))
 
     lines = list(order.lines.prefetch_related('assortment'))
     line = None
@@ -175,8 +186,9 @@ def order_detail(request, pk):
         line = next((ln for ln in lines if str(ln.pk) == line_id), lines[0])
 
     ctx = {
-        'order': order, 'tab': tab, 'tabs': tab_states(order, user), 'lines': lines, 'line': line,
-        'is_admin': admin, 'sg': suggestions(), 'size_count': range(SIZE_COUNT),
+        'order': order, 'tab': tab, 'tabs': tab_states(order), 'lines': lines, 'line': line,
+        'is_staff': is_staff(user), 'sg': suggestions(), 'size_count': range(SIZE_COUNT),
+        'can_delete_order': can_delete_order(user, order),
     }
 
     if tab == 'order':
@@ -210,8 +222,15 @@ def order_detail(request, pk):
             ctx['all_costing'] = [line_costing(ln) for ln in lines]
             ctx['can_continue'] = all(c['row_count'] and not c['unpriced'] for c in ctx['all_costing'])
     elif tab == 'po':
-        pos = list(order.supplier_pos.prefetch_related('lines'))
+        pos = list(order.supplier_pos.select_related('created_by', 'approved_by').prefetch_related('lines'))
+        for po in pos:
+            po.can_edit = po.editable_by(user)
+            po.can_edit_details = po.details_editable_by(user)
         ctx['pos'] = [(po, SupplierPOForm(instance=po, prefix=f'po{po.pk}')) for po in pos]
+        for po, form in ctx['pos']:
+            if po.is_approved:
+                form.fields['supplier'].disabled = form.fields['material_type'].disabled = True
+        ctx['movable_targets'] = [po for po in pos if po.can_edit]
         ctx['pending'] = pending_items(order)
         ctx['all_pos'] = pos
 
@@ -220,19 +239,30 @@ def order_detail(request, pk):
 
 @login_required
 def po_list(request):
-    require_admin(request.user)
     q = request.GET.get('q', '').strip()
-    pos = SupplierPO.objects.select_related('order').prefetch_related('lines')
+    approval = request.GET.get('approval', '')
+    pos = SupplierPO.objects.select_related('order', 'created_by', 'approved_by').prefetch_related('lines')
+    if approval in dict(SupplierPO.APPROVAL_CHOICES):
+        pos = pos.filter(approval=approval)
     if q:
         pos = pos.filter(Q(supplier__icontains=q) | Q(order__po_number__icontains=q)
                          | Q(pi_no__icontains=q) | Q(lc_no__icontains=q))
-    return render(request, 'orders/po_list.html', {'pos': pos, 'q': q, 'is_admin': is_admin(request.user)})
+    return render(request, 'orders/po_list.html', {
+        'pos': pos, 'q': q, 'approval': approval, 'approval_choices': SupplierPO.APPROVAL_CHOICES})
+
+
+@login_required
+def approvals(request):
+    """Staff inbox: every supplier PO waiting for approval."""
+    require_staff(request.user)
+    pos = (SupplierPO.objects.filter(approval='pending').select_related('order', 'created_by')
+           .prefetch_related('lines').order_by('created_at'))
+    return render(request, 'orders/approvals.html', {'pos': pos})
 
 
 @login_required
 def po_excel(request, po_id):
     """The supplier PO as an Excel document."""
-    require_admin(request.user)
     po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by'), pk=po_id)
     return exports.supplier_po_xlsx(po, display_name(po.created_by or request.user))
 
@@ -240,7 +270,6 @@ def po_excel(request, po_id):
 @login_required
 def po_pdf(request, po_id):
     """The supplier PO as a PDF."""
-    require_admin(request.user)
     po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by'), pk=po_id)
     return exports.supplier_po_pdf(po, display_name(po.created_by or request.user))
 
@@ -248,10 +277,20 @@ def po_pdf(request, po_id):
 @login_required
 def costing_excel(request, pk, line_id):
     """One style's cost sheet as an Excel document (uses saved prices)."""
-    require_admin(request.user)
     order = get_object_or_404(Order, pk=pk)
     line = get_object_or_404(order.lines.prefetch_related('assortment'), pk=line_id)
     return exports.cost_sheet_xlsx(order, line, display_name(request.user))
+
+
+@login_required
+def bom_download(request, pk, line_id, fmt):
+    """One style's BOM (no prices) as Excel or PDF."""
+    order = get_object_or_404(Order, pk=pk)
+    line = get_object_or_404(order.lines.prefetch_related('assortment'), pk=line_id)
+    build = {'excel': exports.bom_xlsx, 'pdf': exports.bom_pdf}.get(fmt)
+    if build is None:
+        raise Http404
+    return build(order, line, display_name(request.user))
 
 
 # --------------------------------------------------------------------------
@@ -275,8 +314,9 @@ def order_update(request, pk):
 @login_required
 @require_POST
 def order_delete(request, pk):
-    require_admin(request.user)
     order = get_object_or_404(Order, pk=pk)
+    if not can_delete_order(request.user, order):
+        raise PermissionDenied('Only the user who created this order, or a staff user, can delete it.')
     order.delete()
     messages.success(request, f'{order.po_number} deleted.')
     return redirect('home')
@@ -300,7 +340,6 @@ def advance(request, pk, stage):
         if bad:
             problem = 'Add BOM materials for: ' + ', '.join(bad)
     elif stage == Order.STAGE_PO:
-        require_admin(request.user)
         bad = [c['line'].style for c in (line_costing(ln) for ln in lines) if c['unpriced'] or not c['row_count']]
         if bad:
             problem = 'Enter a price for every BOM row of: ' + ', '.join(bad)
@@ -314,9 +353,6 @@ def advance(request, pk, stage):
 
     order.advance_to(stage)
     next_tab = next(k for k, _, s, _ in TABS if s == stage)
-    if next_tab in ADMIN_TABS and not is_admin(request.user):
-        messages.info(request, 'BOM complete. Costing is now waiting for an admin to enter prices.')
-        return redirect(order_url(order, 'bom'))
     messages.success(request, f'Step complete — {dict((k, lbl) for k, lbl, _, _ in TABS)[next_tab]} unlocked.')
     return redirect(order_url(order, next_tab))
 
@@ -500,13 +536,12 @@ def bom_save(request, pk, line_id):
 
 
 # --------------------------------------------------------------------------
-# tab 5 — costing (admin only)
+# tab 5 — costing
 # --------------------------------------------------------------------------
 
 @login_required
 @require_POST
 def costing_save(request, pk, line_id):
-    require_admin(request.user)
     line = get_object_or_404(OrderLine, pk=line_id, order_id=pk)
     for row in BOMRow.objects.filter(item__line=line):
         field = f'r-{row.pk}-price'
@@ -520,7 +555,6 @@ def costing_save(request, pk, line_id):
 @login_required
 @require_POST
 def extra_add(request, pk, line_id):
-    require_admin(request.user)
     line = get_object_or_404(OrderLine, pk=line_id, order_id=pk)
     form = CostExtraForm(request.POST)
     if form.is_valid():
@@ -535,7 +569,6 @@ def extra_add(request, pk, line_id):
 @login_required
 @require_POST
 def extra_delete(request, pk, extra_id):
-    require_admin(request.user)
     extra = get_object_or_404(CostExtra.objects.select_related('line__order'), pk=extra_id, line__order_id=pk)
     extra.delete()
     return redirect(order_url(extra.line.order, 'costing', extra.line))
@@ -549,8 +582,7 @@ def extra_delete(request, pk, extra_id):
 @require_POST
 def po_assign(request, pk):
     """Saves the supplier typed against each not-yet-ordered material, then
-    (when the Generate button was used) raises the POs."""
-    require_admin(request.user)
+    (when the Generate button was used) raises the POs, pending approval."""
     order = get_object_or_404(Order, pk=pk)
     if order.stage < Order.STAGE_PO:
         raise PermissionDenied
@@ -566,7 +598,7 @@ def po_assign(request, pk):
         return redirect(order_url(order, 'po'))
     created = generate_supplier_pos(order, request.user)
     if created:
-        messages.success(request, f'{len(created)} supplier PO(s) created: ' + ', '.join(
+        messages.success(request, f'{len(created)} supplier PO(s) created and sent for approval: ' + ', '.join(
             f'{po.supplier} ({po.type_label})' for po in created))
     else:
         messages.warning(request, 'Nothing generated — type a supplier against the materials first.')
@@ -576,8 +608,8 @@ def po_assign(request, pk):
 @login_required
 @require_POST
 def po_move(request, pk, po_id):
-    require_admin(request.user)
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
+    require_po_lines(request.user, po)
     order, po_no = po.order, po.po_no
     line_ids = [int(v) for v in request.POST.getlist('line') if v.isdigit()]
     target = request.POST.get('target', '')
@@ -586,6 +618,8 @@ def po_move(request, pk, po_id):
     if not line_ids or not valid:
         messages.error(request, 'Tick the lines to move and choose where they should go.')
         return redirect(order_url(order, 'po'))
+    if target.isdigit():
+        require_po_lines(request.user, order.supplier_pos.get(pk=target))
     dest = move_po_lines(po, line_ids, target, request.user)
     where = 'back to the not-ordered list' if dest is None else f'to {dest.po_no}'
     messages.success(request, f'{len(line_ids)} line(s) moved from {po_no} {where}.')
@@ -595,10 +629,11 @@ def po_move(request, pk, po_id):
 @login_required
 @require_POST
 def po_merge(request, pk):
-    require_admin(request.user)
     order = get_object_or_404(Order, pk=pk)
     ids = [int(v) for v in request.POST.getlist('po') if v.isdigit()]
     pos = list(order.supplier_pos.filter(pk__in=ids))
+    for po in pos:
+        require_po_lines(request.user, po)
     if len(pos) < 2:
         messages.error(request, 'Tick at least two POs to merge.')
     elif len({po.supplier.strip().lower() for po in pos}) > 1:
@@ -614,11 +649,19 @@ def po_merge(request, pk):
 @login_required
 @require_POST
 def po_update(request, pk, po_id):
-    require_admin(request.user)
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
+    require_po_details(request.user, po)
     form = SupplierPOForm(request.POST, instance=po, prefix=f'po{po.pk}')
     if form.is_valid():
-        form.save()
+        updated = form.save(commit=False)
+        if updated.is_approved:
+            # What is being ordered, and from whom, is fixed once approved.
+            original = SupplierPO.objects.get(pk=po.pk)
+            updated.supplier, updated.material_type = original.supplier, original.material_type
+        if not updated.is_approved and updated.status != 'draft':
+            updated.status = 'draft'
+            messages.warning(request, f'{po.po_no} stays a draft until a staff user approves it.')
+        updated.save()
         messages.success(request, f'{po.po_no} saved.')
     else:
         messages.error(request, f'{po.po_no} not saved — check the dates.')
@@ -628,29 +671,90 @@ def po_update(request, pk, po_id):
 @login_required
 @require_POST
 def po_lines_save(request, pk, po_id):
-    require_admin(request.user)
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
-    admin = is_admin(request.user)
+    require_po_lines(request.user, po)
     for line in po.lines.all():
         qty = to_dec(request.POST.get(f'l-{line.pk}-qty'))
         if qty is not None:
             line.qty = qty
-        if admin and f'l-{line.pk}-price' in request.POST:
+        if f'l-{line.pk}-price' in request.POST:
             line.price = to_dec(request.POST[f'l-{line.pk}-price'])
         line.save()
-    messages.success(request, f'{po.po_no} quantities saved.')
+    messages.success(request, f'{po.po_no} lines saved.')
     return redirect(order_url(po.order, 'po'))
 
 
 @login_required
 @require_POST
 def po_delete(request, pk, po_id):
-    require_admin(request.user)
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
+    require_po_lines(request.user, po)
     po_no = po.po_no
     po.delete()
     messages.success(request, f'{po_no} deleted — its materials can be generated again.')
     return redirect(order_url(po.order, 'po'))
+
+
+def _back(request, po):
+    """Return to where the approval was made: the approvals inbox or the order."""
+    nxt = request.POST.get('next', '')
+    return redirect(nxt if nxt.startswith('/') and not nxt.startswith('//') else order_url(po.order, 'po'))
+
+
+@login_required
+@require_POST
+def po_approve(request, pk, po_id):
+    require_staff(request.user)
+    po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
+    if not po.lines.exists():
+        messages.error(request, f'{po.po_no} has no lines to approve.')
+        return _back(request, po)
+    po.approval, po.approved_by, po.approved_at = 'approved', request.user, timezone.now()
+    po.approval_note = request.POST.get('note', '').strip()
+    po.save(update_fields=['approval', 'approved_by', 'approved_at', 'approval_note'])
+    messages.success(request, f'{po.po_no} approved.')
+    return _back(request, po)
+
+
+@login_required
+@require_POST
+def po_reject(request, pk, po_id):
+    require_staff(request.user)
+    po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
+    note = request.POST.get('note', '').strip()
+    if not note:
+        messages.error(request, 'Give a reason so the PO can be corrected.')
+        return _back(request, po)
+    po.approval, po.approved_by, po.approved_at, po.approval_note = 'rejected', None, None, note
+    po.status = 'draft'
+    po.save(update_fields=['approval', 'approved_by', 'approved_at', 'approval_note', 'status'])
+    messages.success(request, f'{po.po_no} sent back: {note}')
+    return _back(request, po)
+
+
+@login_required
+@require_POST
+def po_reopen(request, pk, po_id):
+    """Staff: unlock an approved PO for changes; it then needs approving again."""
+    require_staff(request.user)
+    po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
+    po.approval, po.approved_by, po.approved_at, po.approval_note = 'pending', None, None, ''
+    po.status = 'draft'
+    po.save(update_fields=['approval', 'approved_by', 'approved_at', 'approval_note', 'status'])
+    messages.success(request, f'{po.po_no} reopened for changes — approve it again when done.')
+    return _back(request, po)
+
+
+@login_required
+@require_POST
+def po_resubmit(request, pk, po_id):
+    """The raiser sends a rejected PO back for approval after correcting it."""
+    po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
+    require_po_lines(request.user, po)
+    po.approval = 'pending'
+    po.save(update_fields=['approval'])
+    messages.success(request, f'{po.po_no} sent for approval again.')
+    return _back(request, po)
 
 
 # --------------------------------------------------------------------------
@@ -669,17 +773,16 @@ def _report_filters(request):
 
 @login_required
 def report_list(request):
-    admin = is_admin(request.user)
     filters, ctx = _report_filters(request)
     orders = reports.filtered_orders(filters)
     ctx.update({
-        'reports': [{'key': key, 'title': title, 'about': about, 'icon': icon, 'admin_only': admin_only}
-                    for key, (title, about, icon, admin_only, _) in reports.REPORTS.items() if admin or not admin_only],
+        'reports': [{'key': key, 'title': title, 'about': about, 'icon': icon}
+                    for key, (title, about, icon, _) in reports.REPORTS.items()],
         'kpis': {
             'orders': len(orders),
             'qty': sum(o.total_qty for o in orders),
             'value': sum((o.total_amount for o in orders), ZERO),
-            'pos': SupplierPO.objects.filter(order__in=orders).count() if admin else None,
+            'pos': SupplierPO.objects.filter(order__in=orders).count(),
         },
     })
     return render(request, 'orders/report_list.html', ctx)
@@ -689,12 +792,9 @@ def report_list(request):
 def report_detail(request, key):
     if key not in reports.REPORTS:
         raise Http404
-    title, about, icon, admin_only, _ = reports.REPORTS[key]
-    admin = is_admin(request.user)
-    if admin_only:
-        require_admin(request.user)
+    title, about, icon, _ = reports.REPORTS[key]
     filters, ctx = _report_filters(request)
-    table = reports.build(key, filters, admin)
+    table = reports.build(key, filters)
 
     fmt = request.GET.get('download')
     if fmt == 'csv':
@@ -707,6 +807,6 @@ def report_detail(request, key):
 
     params = request.GET.copy()
     params.pop('download', None)
-    ctx.update({'key': key, 'title': title, 'about': about, 'icon': icon, 'admin_only': admin_only,
+    ctx.update({'key': key, 'title': title, 'about': about, 'icon': icon,
                 'table': table, 'query': params.urlencode()})
     return render(request, 'orders/report_detail.html', ctx)

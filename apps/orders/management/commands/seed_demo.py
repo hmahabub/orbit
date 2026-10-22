@@ -12,6 +12,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from apps.orders.models import AssortmentRow, BOMItem, CostExtra, Order, OrderLine, SupplierPO
 from apps.orders.services import generate_supplier_pos
@@ -131,6 +132,8 @@ class Command(BaseCommand):
         order.save()
 
         generate_supplier_pos(order, order.created_by)
+        SupplierPO.objects.filter(order=order).update(approval='approved', approved_by=order.created_by,
+                                                      approved_at=timezone.now())
         SupplierPO.objects.filter(order=order, supplier='Roundstone').update(
             status='issued', pi_no='RS-PI-2611', etd=datetime.date(2026, 11, 20), eta=datetime.date(2026, 11, 28))
 

@@ -5,14 +5,18 @@
 <div class="erp-page-header">
   <h1><i class="bi bi-truck"></i> Supplier PO</h1>
   <form class="d-flex gap-2" method="get">
-    <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Supplier, buyer PO, PI, LC…" style="min-width:240px">
+    <select class="form-select form-select-sm" name="approval" style="width:auto">
+      <option value="">Any approval</option>
+      {% for key, label in approval_choices %}<option value="{{ key }}" {% if approval == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Supplier, buyer PO, PI, LC…" style="min-width:220px">
     <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
   </form>
 </div>
 <div class="erp-card">
   <div class="table-responsive">
     <table class="table erp-table mb-0">
-      <thead><tr><th>PO no.</th><th>Supplier</th><th>Type</th><th>Buyer PO</th><th>PO date</th><th>Delivery</th><th>PI</th><th>LC</th><th>ETD</th><th>ETA</th><th class="text-end">Lines</th>{% if is_admin %}<th class="text-end">Amount</th>{% endif %}<th>Status</th><th></th></tr></thead>
+      <thead><tr><th>PO no.</th><th>Supplier</th><th>Type</th><th>Buyer PO</th><th>PO date</th><th>PI</th><th>ETD</th><th>ETA</th><th class="text-end">Lines</th><th class="text-end">Amount</th><th>Approval</th><th>Status</th><th>Raised by</th><th></th></tr></thead>
       <tbody>
       {% for po in pos %}
         <tr>
@@ -21,19 +25,19 @@
           <td>{{ po.type_label }}</td>
           <td><a href="{% url 'order_detail' po.order.pk %}">{{ po.order.po_number }}</a></td>
           <td>{{ po.po_date|date:"d M Y" }}</td>
-          <td>{{ po.delivery_date|date:"d M Y"|default:"—" }}</td>
           <td>{{ po.pi_no|default:"—" }}</td>
-          <td>{{ po.lc_no|default:"—" }}</td>
           <td>{{ po.etd|date:"d M"|default:"—" }}</td>
           <td>{{ po.eta|date:"d M"|default:"—" }}</td>
           <td class="text-end">{{ po.lines.all|length }}</td>
-          {% if is_admin %}<td class="text-end">{{ po.total_amount|num:2 }}</td>{% endif %}
+          <td class="text-end">{{ po.total_amount|num:2 }}</td>
+          <td><span class="badge approval-badge-{{ po.approval }}" {% if po.approval_note %}title="{{ po.approval_note }}"{% endif %}>{{ po.get_approval_display }}</span></td>
           <td><span class="badge po-status-{{ po.status }}">{{ po.get_status_display }}</span></td>
+          <td>{{ po.creator_name|default:"—" }}</td>
           <td class="text-nowrap"><a class="btn btn-sm btn-outline-secondary" href="{% url 'po_excel' po.pk %}" title="Download Excel"><i class="bi bi-file-earmark-excel"></i></a>
             <a class="btn btn-sm btn-outline-secondary" href="{% url 'po_pdf' po.pk %}" title="Download PDF"><i class="bi bi-file-earmark-pdf"></i></a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="14" class="text-center text-muted py-5">No supplier POs yet. They are generated from an order's Supplier PO tab.</td></tr>
+        <tr><td colspan="14" class="text-center text-muted py-5">No supplier POs here. They are generated from an order's Supplier PO tab.</td></tr>
       {% endfor %}
       </tbody>
     </table>
