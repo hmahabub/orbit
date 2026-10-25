@@ -63,7 +63,7 @@ Order numbers read **ORD-YY-xxxxx** and PO numbers **SPO-YY-xxxxx**: the year it
 
 A PO's **Details** hold the supplier, type, status, dates, PI no., LC no., PI to, PI to location, factory location, destination, ETD and ETA.
 
-Each PO can be **viewed** on screen (click its PO number), or downloaded as an **Excel** document laid out for printing (landscape, one page wide), or as a **PDF** with the same content. It shows those details, each line's placement, body color, color combination, size and spec from the BOM, and the name of the user who raised it under *Prepared by*. Amounts and the total are live formulas. The Costing tab has the same kind of Excel download for a style's cost sheet. The BOM tab downloads a style's BOM, without prices, as Excel or PDF.
+Each PO can be **viewed** on screen (click its PO number), or downloaded as an **Excel** document laid out for printing (landscape, one page wide), or as a **PDF** with the same content. It shows those details, each line's placement, body color, color combination, size and spec from the BOM, the name of the user who raised it under *Prepared by*, and the staff user who approved it under *Checked by*. Amounts and the total are live formulas. The Costing tab has the same kind of Excel download for a style's cost sheet. The BOM tab downloads a style's BOM, without prices, as Excel or PDF.
 
 ## Reports
 

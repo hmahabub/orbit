@@ -281,7 +281,7 @@ class WorkflowTests(TestCase):
         self.assertEqual(po.status, 'closed')
         text = self.xlsx_text(self.client.get(reverse('po_excel', args=[po.pk])))
         self.assertNotIn('NOT APPROVED', text)
-        self.assertIn('boss', text)  # approver under Authorized signature
+        self.assertRegex(text, r'merch \| boss · \d{2} \w{3} \d{4} \| Prepared by \| Checked by \| Authorized signature')
 
         # Staff can reopen it for changes; it then needs approving again.
         self.client.force_login(self.admin)
@@ -332,6 +332,10 @@ class WorkflowTests(TestCase):
         self.assertFalse(resp.context['can_edit'])
         self.assertContains(resp, 'View only')
         self.assertEqual(self.client.get(reverse('bom_download', args=[order.pk, line.pk, 'excel'])).status_code, 200)
+        # Prepared by is the order's creator, not whoever downloads it.
+        text = self.xlsx_text(self.client.get(reverse('bom_download', args=[order.pk, line.pk, 'excel'])))
+        self.assertIn('merch | Prepared by', text)
+        self.assertNotIn('other', text)
         # Can't change anything.
         blocked = [
             ('order_update', [order.pk]), ('order_delete', [order.pk]), ('advance', [order.pk, Order.STAGE_COSTING]),

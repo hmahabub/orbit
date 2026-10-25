@@ -116,11 +116,12 @@ class Sheet:
         self.ws.print_title_rows = f'{self.row}:{self.row}'
         self.row += 1
 
-    def signatures(self, prepared_by, authorized_by=''):
+    def signatures(self, prepared_by, checked_by=''):
+        """Prepared by = who created the document; Checked by = who approved it."""
         self.row += 3
         third = self.cols // 3
-        for i, (name, label) in enumerate([(prepared_by, 'Prepared by'), ('', 'Checked by'),
-                                           (authorized_by, 'Authorized signature')]):
+        for i, (name, label) in enumerate([(prepared_by, 'Prepared by'), (checked_by, 'Checked by'),
+                                           ('', 'Authorized signature')]):
             first = 1 + i * third
             last = first + third - 2
             c = self.ws.cell(row=self.row, column=first, value=name)
@@ -175,7 +176,7 @@ def po_details(po):
 
 
 def po_approval(po):
-    """(warning line, name for the Authorized signature slot)."""
+    """(warning line, name for the Checked by slot: the approver and date)."""
     if po.is_approved:
         return None, f"{po.approver_name} · {po.approved_at:%d %b %Y}" if po.approved_at else po.approver_name
     return f'DRAFT — NOT APPROVED ({po.get_approval_display().lower()})', ''
@@ -188,7 +189,7 @@ PO_COLUMNS = ['#', 'Style', 'Item', 'Placement', 'Body color', 'Color combinatio
 def supplier_po_xlsx(po, prepared_by):
     order = po.order
     sh = Sheet(po.po_no, [5, 21, 34, 18, 16, 18, 9, 12, 11, 8, 11, 14])
-    warning, authorized_by = po_approval(po)
+    warning, checked_by = po_approval(po)
     sh.title(f'Purchase Order · {po.type_label}', po.po_no, warning)
     sh.info([(label, value, 'dd mmm yyyy') if isinstance(value, datetime.date) else (label, value)
              for label, value in po_details(po)], spans=(((1, 2), (3, 5)), ((6, 7), (8, 12))))
@@ -217,7 +218,7 @@ def supplier_po_xlsx(po, prepared_by):
         sh.cell(1, f'Notes: {po.notes}', box=False, wrap=True)
         sh.merge(1, sh.cols)
         sh.ws.row_dimensions[sh.row].height = 15 * (po.notes.count('\n') + 1 + len(po.notes) // 120)
-    sh.signatures(prepared_by, authorized_by)
+    sh.signatures(prepared_by, checked_by)
     return sh.response(f'{po.po_no} {po.supplier}')
 
 
@@ -314,12 +315,13 @@ class PdfDoc:
             style += [('SPAN', (0, -1), (-2, -1)), ('BACKGROUND', (0, -1), (-1, -1), self.total_bg)]
         self.add(self.Table(data, colWidths=col_widths, repeatRows=1, style=style + list(extra_style)))
 
-    def signatures(self, prepared_by, authorized_by=''):
+    def signatures(self, prepared_by, checked_by=''):
+        """Prepared by = who created the document; Checked by = who approved it."""
         w = self.width
         self.add(self.Spacer(1, 16 * self.mm))
         line = self.colors.black
         self.add(self.Table(
-            [[self.p(prepared_by, self.center_bold), '', '', '', self.p(authorized_by, self.center_bold)],
+            [[self.p(prepared_by, self.center_bold), '', self.p(checked_by, self.center_bold), '', ''],
              [self.p('Prepared by', self.center), '', self.p('Checked by', self.center), '',
               self.p('Authorized signature', self.center)]],
             colWidths=[w * .26, w * .11, w * .26, w * .11, w * .26],
@@ -343,7 +345,7 @@ class PdfDoc:
 
 def supplier_po_pdf(po, prepared_by):
     """The supplier PO as a PDF: same content and layout as the Excel one."""
-    warning, authorized_by = po_approval(po)
+    warning, checked_by = po_approval(po)
     pdf = PdfDoc(f'{po.po_no} {po.supplier}', po.po_no, f'Purchase Order · {po.type_label}', warning)
     pdf.details(po_details(po))
     p, right = pdf.p, pdf.right
@@ -359,7 +361,7 @@ def supplier_po_pdf(po, prepared_by):
     if po.notes:
         pdf.add(pdf.Spacer(1, 4 * pdf.mm))
         pdf.add(p(f'Notes: {po.notes}'))
-    pdf.signatures(prepared_by, authorized_by)
+    pdf.signatures(prepared_by, checked_by)
     return pdf.response(f'{po.po_no} {po.supplier}')
 
 

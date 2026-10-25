@@ -52,6 +52,13 @@ def owner_required(view):
     return wrapper
 
 
+def prepared_by(po=None, order=None):
+    """Who created the document: the PO's raiser (older POs: the order's
+    creator), or the order's creator for the BOM and cost sheet."""
+    user = (po.created_by or po.order.created_by) if po else order.created_by
+    return display_name(user)
+
+
 def display_name(user):
     return (user.get_full_name() or user.username) if user else ''
 
@@ -268,9 +275,9 @@ def approvals(request):
 def po_view(request, po_id):
     """Everything on the PO document — details, lines with BOM detail, total,
     approval — on screen, without downloading."""
-    po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by', 'approved_by'), pk=po_id)
+    po = get_object_or_404(SupplierPO.objects.select_related('order__created_by', 'created_by', 'approved_by'), pk=po_id)
     po.can_edit = po.editable_by(request.user)
-    warning, authorized_by = exports.po_approval(po)
+    warning, checked_by = exports.po_approval(po)
     details = exports.po_details(po)
     referer = request.META.get('HTTP_REFERER', '')
     return render(request, 'orders/po_view.html', {
@@ -278,8 +285,8 @@ def po_view(request, po_id):
         'lines': exports.po_lines_with_detail(po),
         'details': [details[i:i + 2] for i in range(0, len(details), 2)],
         'warning': warning,
-        'prepared_by': display_name(po.created_by),
-        'authorized_by': authorized_by,
+        'prepared_by': prepared_by(po),
+        'checked_by': checked_by,
         'company_name': settings.COMPANY_NAME,
         'company_address': settings.COMPANY_ADDRESS,
         'back_url': referer if referer and request.get_host() in referer and referer != request.build_absolute_uri()
@@ -290,15 +297,15 @@ def po_view(request, po_id):
 @login_required
 def po_excel(request, po_id):
     """The supplier PO as an Excel document."""
-    po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by'), pk=po_id)
-    return exports.supplier_po_xlsx(po, display_name(po.created_by or request.user))
+    po = get_object_or_404(SupplierPO.objects.select_related('order__created_by', 'created_by', 'approved_by'), pk=po_id)
+    return exports.supplier_po_xlsx(po, prepared_by(po))
 
 
 @login_required
 def po_pdf(request, po_id):
     """The supplier PO as a PDF."""
-    po = get_object_or_404(SupplierPO.objects.select_related('order', 'created_by'), pk=po_id)
-    return exports.supplier_po_pdf(po, display_name(po.created_by or request.user))
+    po = get_object_or_404(SupplierPO.objects.select_related('order__created_by', 'created_by', 'approved_by'), pk=po_id)
+    return exports.supplier_po_pdf(po, prepared_by(po))
 
 
 @login_required
@@ -306,7 +313,7 @@ def costing_excel(request, pk, line_id):
     """One style's cost sheet as an Excel document (uses saved prices)."""
     order = get_object_or_404(Order, pk=pk)
     line = get_object_or_404(order.lines.prefetch_related('assortment'), pk=line_id)
-    return exports.cost_sheet_xlsx(order, line, display_name(request.user))
+    return exports.cost_sheet_xlsx(order, line, prepared_by(order=order))
 
 
 @login_required
@@ -317,7 +324,7 @@ def bom_download(request, pk, line_id, fmt):
     build = {'excel': exports.bom_xlsx, 'pdf': exports.bom_pdf}.get(fmt)
     if build is None:
         raise Http404
-    return build(order, line, display_name(request.user))
+    return build(order, line, prepared_by(order=order))
 
 
 # --------------------------------------------------------------------------
