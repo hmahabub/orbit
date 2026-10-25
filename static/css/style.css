@@ -259,3 +259,6 @@ fieldset.order-workspace { min-width: 0; }
 fieldset.order-workspace:disabled .sheet input, fieldset.order-workspace:disabled .sheet select,
 fieldset.order-workspace:disabled .sheet textarea { color: inherit; background: transparent; }
 fieldset.order-workspace:disabled .add-row, fieldset.order-workspace:disabled .btn-erp-primary { display: none; }
+/* Links (View, Excel, PDF, next tab) only read or download, so they stay usable.
+   Bootstrap would otherwise switch off every .btn inside a disabled fieldset. */
+fieldset.order-workspace:disabled a.btn { pointer-events: auto; opacity: 1; }
