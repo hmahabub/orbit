@@ -33,7 +33,7 @@
     <table class="table erp-table mb-0">
       <thead><tr>
         <th>Order</th><th>Buyer PO</th><th>Buyer</th><th>Description</th><th>Factory</th>
-        <th class="text-end">Qty</th><th class="text-end">Value</th><th>Ship date</th><th>Progress</th><th>Status</th>
+        <th class="text-end">Qty</th><th class="text-end">Value</th><th>Ship date</th><th>Progress</th><th>Status</th><th>Created by</th>
       </tr></thead>
       <tbody>
       {% for o in orders %}
@@ -53,9 +53,10 @@
             <small class="text-muted">{% for l in stage_labels %}{% if forloop.counter == o.stage %}{{ l }}{% endif %}{% endfor %}</small>
           </td>
           <td><span class="badge status-{{ o.status }}">{{ o.get_status_display }}</span></td>
+          <td class="text-nowrap">{% if o.created_by_id == user.id %}<i class="bi bi-person-check text-success" title="You created this order"></i> {% endif %}{{ o.creator_name|default:"—" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="10" class="text-center text-muted py-5">
+        <tr><td colspan="11" class="text-center text-muted py-5">
           No orders here yet. <a href="{% url 'order_create' %}">Create the first order</a>.
         </td></tr>
       {% endfor %}

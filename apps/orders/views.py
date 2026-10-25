@@ -136,7 +136,7 @@ def home(request):
     status = request.GET.get('status', 'running')
     q = request.GET.get('q', '').strip()
 
-    orders = Order.objects.prefetch_related('lines')
+    orders = Order.objects.select_related('created_by').prefetch_related('lines')
     if status in dict(Order.STATUS_CHOICES):
         orders = orders.filter(status=status)
     if q:
