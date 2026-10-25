@@ -51,11 +51,13 @@ class BOMItemForm(BootstrapMixin, forms.ModelForm):
 
     class Meta:
         model = BOMItem
-        fields = ['category', 'name', 'placement', 'allocation', 'color_combo', 'spec', 'consumption', 'unit']
+        fields = ['category', 'name', 'placement', 'allocation', 'color_combo', 'spec', 'consumption', 'unit',
+                  'supplier']
         widgets = {
             'name': forms.TextInput(attrs={'list': 'dl-materials', 'autocomplete': 'off'}),
             'placement': forms.TextInput(attrs={'list': 'dl-placements', 'autocomplete': 'off'}),
             'unit': forms.TextInput(attrs={'list': 'dl-units', 'autocomplete': 'off'}),
+            'supplier': forms.TextInput(attrs={'list': 'dl-suppliers', 'autocomplete': 'off'}),
             'color_combo': forms.TextInput(attrs={'list': 'dl-colors', 'autocomplete': 'off',
                                                   'placeholder': 'Body color'}),
             'consumption': forms.NumberInput(attrs={'step': 'any', 'min': '0', 'placeholder': 'per pc'}),

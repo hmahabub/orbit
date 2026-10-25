@@ -121,7 +121,7 @@
         <td colspan="8" class="text-end small text-muted">
           <i class="bi bi-lock"></i>
           {% if po.is_approved %}Approved — {% if user.is_staff %}reopen it to change lines.{% else %}a staff user can reopen it for changes.{% endif %}
-          {% else %}Raised by {{ po.creator_name|default:"someone else" }} — only they or a staff user can change it.{% endif %}
+          {% else %}Only {{ order.creator_name|default:"the order's creator" }} or a staff user can change this order's POs.{% endif %}
         </td>
         {% endif %}
         <td class="text-end fw-bold">{{ po.total_amount|num:2 }}</td>

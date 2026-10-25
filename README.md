@@ -13,7 +13,7 @@ The six steps are tabs on one order page. Each tab unlocks when the one before i
 | **1. Order** | Buyer PO, buyer, factory, ship date, status | Created |
 | **2. Line Items** | Styles on the PO: style, description, qty, price/pc | At least one line exists |
 | **3. Assortment** | Color × size breakdown per style. Pick **letter sizes** (S, M, L, XL, XXL, 3XL, 4XL, 5XL) or **number sizes** (30–44) | Every style's breakdown adds up to its line qty |
-| **4. BOM** | Excel-style sheet per style: type, item, placement, color, size, consumption/pc ⇄ total req. No prices or suppliers. Excel and PDF download | Every style has materials |
+| **4. BOM** | Excel-style sheet per style: type, item, placement, color, size, consumption/pc ⇄ total req., supplier. No prices. Excel and PDF download | Every style has materials |
 | **5. Costing** | Price per BOM row, CM/other costs, cost/pc vs FOB, margin per style | Every BOM row has a price |
 | **6. Supplier PO** | Choose a supplier per material, then generate one PO per supplier and material type. Staff approve each PO. Move lines between POs, merge POs, PI/LC/ETD/ETA and delivery details, Excel and PDF PO | — |
 
@@ -23,14 +23,16 @@ Buyer, factory, supplier and material names are typed in directly. There are no 
 
 ## Users and approvals
 
-Every user can use every part of Orbit: orders, assortment, BOM, costing and prices, supplier POs, and all reports.
+Every user can see every part of Orbit: orders, assortment, BOM, costing and prices, supplier POs, and all reports. Every user can create orders.
 
-Two rules sit on top of that:
+Three rules sit on top of that:
 
-- **Supplier POs need staff approval.** A *staff* user is one with *staff status* (set in Django admin → Users). New POs start as **Pending approval**. Staff approve them, or send them back with a note, from the PO or from the **Approvals** page. The Approvals page sits in the top menu, with a count of waiting POs. The raiser corrects a PO that was sent back and sends it for approval again. Until a PO is approved, its status stays *Draft* and its Excel/PDF are marked **DRAFT — NOT APPROVED**. Once approved, the approver's name appears under *Authorized signature*.
-- **A PO belongs to whoever raised it.** Only that user, or a staff user, can change its lines, move or merge its lines, or delete it. Once a PO is approved its lines are locked for everyone; a staff user can **Reopen** it, after which it needs approving again. Dates, PI/LC and delivery details stay editable by the raiser after approval. The supplier and type do not.
+- **An order belongs to whoever created it.** Only that user, or a staff user, can change it: order details, line items, assortment, BOM, costing and its supplier POs, and deleting it. Everyone else sees the order **view only**, and downloads still work.
 
-POs raised before approvals existed count as approved. Those with no recorded raiser can only be changed by staff. An order can be deleted by the user who created it, or by staff.
+- **Supplier POs need staff approval.** A *staff* user is one with *staff status* (set in Django admin → Users). New POs start as **Pending approval**. Staff approve them, or send them back with a note, from the PO or from the **Approvals** page. The Approvals page sits in the top menu, with a count of waiting POs. The order's owner corrects a PO that was sent back and sends it for approval again. Until a PO is approved, its status stays *Draft* and its Excel/PDF are marked **DRAFT — NOT APPROVED**. Once approved, the approver's name appears under *Authorized signature*.
+- **Approved POs are locked.** Once a PO is approved its lines are locked for everyone; a staff user can **Reopen** it, after which it needs approving again. Dates, PI/LC and delivery details stay editable by the order's owner after approval. The supplier and type do not.
+
+POs raised before approvals existed count as approved. Orders with no recorded creator can only be changed by staff.
 
 ## BOM allocation
 
@@ -51,9 +53,9 @@ Costing is also one sheet per style, with a price per row, other costs per piece
 
 ## Supplier POs
 
-Every BOM material has a **Type**: Fabric, Lining, Inter-lining, Pocketing, Trims, Accessories, Labels, Packing or Other. Suppliers are not part of the BOM. They are chosen on the Supplier PO tab:
+Every BOM material has a **Type**: Fabric, Lining, Inter-lining, Pocketing, Trims, Accessories, Labels, Packing or Other. A material's supplier can be typed in when it is added to the BOM, or set later on the Supplier PO tab:
 
-1. **Choose suppliers.** The top of the tab lists every material not on a PO yet. Type a supplier against each one.
+1. **Check suppliers.** The top of the tab lists every material not on a PO yet, with the supplier given in the BOM. Fill in or change any of them.
 2. **Generate.** One PO is raised per supplier *and* type, so a supplier giving both fabric and trims gets two POs. Materials left without a supplier stay in the list.
 3. **Adjust.** Tick lines inside a PO and move them to another PO, to a new PO, or back to "not ordered". Tick two or more POs of the same supplier and merge them into one. A PO holding more than one type shows as **Mixed**. The supplier, type, dates, PI and LC of a PO are edited under **Details**.
 

@@ -45,6 +45,13 @@
   {% if not line %}<div class="alert alert-warning">This order has no line items yet.</div>{% endif %}
 {% endif %}
 
+{% if not can_edit %}
+<div class="alert alert-secondary py-2 d-flex align-items-center gap-2 readonly-note">
+  <i class="bi bi-eye"></i>
+  <span>View only — this order belongs to <b>{{ order.creator_name|default:"another user" }}</b>. Only they or a staff user can change it. Downloads still work.</span>
+</div>
+{% endif %}
+<fieldset class="order-workspace" {% if not can_edit %}disabled{% endif %}>
 {% if tab == 'order' %}{% include "orders/tabs/order.html" %}
 {% elif tab == 'lines' %}{% include "orders/tabs/lines.html" %}
 {% elif tab == 'assortment' and line %}{% include "orders/tabs/assortment.html" %}
@@ -52,6 +59,7 @@
 {% elif tab == 'costing' and line %}{% include "orders/tabs/costing.html" %}
 {% elif tab == 'po' %}{% include "orders/tabs/po.html" %}
 {% endif %}
+</fieldset>
 
 {% include "orders/_datalists.html" %}
 {% endblock %}

@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import BOMItem, BOMRow, Order, SupplierPO
+from .models import BOMItem, BOMRow, CostExtra, Order, SupplierPO
 
 
 class WorkflowTests(TestCase):
@@ -308,6 +308,54 @@ class WorkflowTests(TestCase):
         # The order's creator may delete it.
         self.assertEqual(self.client.post(reverse('order_delete', args=[order.pk])).status_code, 302)
         self.assertFalse(Order.objects.filter(pk=order.pk).exists())
+
+    def test_only_the_creator_or_staff_can_change_an_order(self):
+        order = self.create_order()            # created by merch
+        line = self.add_line_and_assortment(order)
+        self.client.post(reverse('advance', args=[order.pk, Order.STAGE_BOM]))
+        # Supplier can be given when the material is added to the BOM.
+        twill = self.add_material(line, name='Twill', supplier='Roundstone', unit='Yds')
+        self.assertEqual(twill.supplier, 'Roundstone')
+        self.client.post(reverse('bom_save', args=[order.pk, line.pk]), {
+            f'i-{twill.pk}-name': 'Twill', f'i-{twill.pk}-supplier': 'Mashfiq', f'i-{twill.pk}-unit': 'Yds'})
+        twill.refresh_from_db()
+        self.assertEqual(twill.supplier, 'Mashfiq')
+        row = twill.rows.get()
+        extra = CostExtra.objects.create(line=line, name='CM', cost_per_pc=1)
+        po = SupplierPO.objects.create(order=order, supplier='Mashfiq', created_by=self.merch)
+
+        other = get_user_model().objects.create_user('other', password='x')
+        self.client.force_login(other)
+        # Can look, read-only.
+        resp = self.detail(order, 'bom')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['can_edit'])
+        self.assertContains(resp, 'View only')
+        self.assertEqual(self.client.get(reverse('bom_download', args=[order.pk, line.pk, 'excel'])).status_code, 200)
+        # Can't change anything.
+        blocked = [
+            ('order_update', [order.pk]), ('order_delete', [order.pk]), ('advance', [order.pk, Order.STAGE_COSTING]),
+            ('line_add', [order.pk]), ('line_update', [order.pk, line.pk]), ('line_delete', [order.pk, line.pk]),
+            ('assortment_save', [order.pk, line.pk]), ('bom_item_add', [order.pk, line.pk]),
+            ('bom_save', [order.pk, line.pk]), ('bom_item_delete', [order.pk, twill.pk]),
+            ('costing_save', [order.pk, line.pk]), ('extra_add', [order.pk, line.pk]),
+            ('extra_delete', [order.pk, extra.pk]), ('po_assign', [order.pk]), ('po_merge', [order.pk]),
+            ('po_move', [order.pk, po.pk]), ('po_update', [order.pk, po.pk]), ('po_lines_save', [order.pk, po.pk]),
+            ('po_delete', [order.pk, po.pk]), ('po_resubmit', [order.pk, po.pk]),
+        ]
+        for name, args in blocked:
+            self.assertEqual(self.client.post(reverse(name, args=args)).status_code, 403, name)
+        self.assertTrue(BOMItem.objects.filter(pk=twill.pk).exists())
+        self.assertEqual(BOMRow.objects.get(pk=row.pk).consumption, row.consumption)
+
+        # Staff can change it.
+        self.client.force_login(self.admin)
+        self.assertTrue(self.detail(order, 'bom').context['can_edit'])
+        self.client.post(reverse('line_update', args=[order.pk, line.pk]), {
+            f'ln{line.pk}-style': 'NEW STYLE', f'ln{line.pk}-description': '', f'ln{line.pk}-qty': line.qty,
+            f'ln{line.pk}-unit_price': '5'})
+        line.refresh_from_db()
+        self.assertEqual(line.style, 'NEW STYLE')
 
     def test_pages_render(self):
         from django.core.management import call_command

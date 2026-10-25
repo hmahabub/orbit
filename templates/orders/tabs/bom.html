@@ -24,7 +24,7 @@
         <th class="c-sl">Sl</th><th class="c-type">Type</th><th class="c-item">Item</th><th class="c-place">Placement</th>
         <th class="c-alloc">Allocation</th><th class="c-body">Body color</th><th class="c-combo">Color combination</th>
         <th class="c-spec">Size / spec</th><th class="c-qty text-end">Order qty</th><th class="c-cons text-end">Cons. / pc</th>
-        <th class="c-req text-end">Total req.</th><th class="c-unit">Unit</th><th class="c-x"></th>
+        <th class="c-req text-end">Total req.</th><th class="c-unit">Unit</th><th class="c-sup">Supplier</th><th class="c-x"></th>
       </tr></thead>
       <tbody>
       {% for item in items %}
@@ -54,13 +54,14 @@
           <td class="req-cell"><input class="text-end fw-semibold js-req" type="number" step="any" min="0" name="r-{{ row.pk }}-req" value="{{ row.requirement|fixed:2 }}" form="bomForm"><input type="hidden" class="js-src" name="r-{{ row.pk }}-src" value="" form="bomForm"></td>
           {% if forloop.first %}
           <td rowspan="{{ n }}" class="item-cell"><input name="i-{{ item.pk }}-unit" value="{{ item.unit }}" form="bomForm" list="dl-units"></td>
+          <td rowspan="{{ n }}" class="item-cell"><input name="i-{{ item.pk }}-supplier" value="{{ item.supplier }}" form="bomForm" list="dl-suppliers" placeholder="Supplier"></td>
           <td rowspan="{{ n }}" class="item-cell text-center"><button class="btn btn-link btn-sm text-danger p-0" form="del{{ item.pk }}" title="Remove material" data-confirm="Remove {{ item.name }} from the BOM?"><i class="bi bi-x-lg"></i></button></td>
           {% endif %}
         </tr>
         {% endfor %}
         {% endwith %}
       {% empty %}
-        <tr><td colspan="13" class="text-center text-muted py-4">No materials yet — type the first one in the row below.</td></tr>
+        <tr><td colspan="14" class="text-center text-muted py-4">No materials yet — type the first one in the row below.</td></tr>
       {% endfor %}
       </tbody>
       <tfoot>
@@ -78,6 +79,7 @@
           <td>{{ f.consumption }}</td>
           <td>{{ f.total_req }}</td>
           <td>{{ f.unit }}</td>
+          <td>{{ f.supplier }}</td>
           <td class="text-center"><button class="btn btn-sm btn-erp-primary px-2" form="addForm" title="Add material"><i class="bi bi-plus-lg"></i></button></td>
         </tr>
         {% endwith %}
@@ -85,7 +87,7 @@
     </table>
   </div>
   <div class="px-3 py-2 border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <small class="text-muted">Type either Cons. / pc or Total req. — the other is calculated (Total req. = order qty × cons. / pc). Order qty comes from the assortment; type a number to override it. Suppliers are chosen on the Supplier PO tab.</small>
+    <small class="text-muted">Type either Cons. / pc or Total req. — the other is calculated (Total req. = order qty × cons. / pc). Order qty comes from the assortment; type a number to override it. The supplier can also be set or changed later on the Supplier PO tab.</small>
     {% if items %}<button class="btn btn-sm btn-erp-primary" form="bomForm"><i class="bi bi-save"></i> Save BOM</button>{% endif %}
   </div>
 </div>

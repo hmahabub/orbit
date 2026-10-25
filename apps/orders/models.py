@@ -89,6 +89,16 @@ class Order(models.Model):
             return 'red'
         return 'amber' if days <= 14 else 'green'
 
+    @property
+    def creator_name(self):
+        user = self.created_by
+        return (user.get_full_name() or user.username) if user else ''
+
+    def editable_by(self, user):
+        """Only the user who created the order, or staff, may change it — order,
+        lines, assortment, BOM, costing and supplier POs alike."""
+        return user.is_staff or user.is_superuser or (self.created_by_id is not None and self.created_by_id == user.id)
+
     def advance_to(self, stage):
         if stage > self.stage:
             self.stage = stage
@@ -386,12 +396,12 @@ class SupplierPO(models.Model):
         return (user.get_full_name() or user.username) if user else ''
 
     def editable_by(self, user):
-        """The raiser (or any staff user) may change a PO's lines until it is approved."""
+        """The order's owner (or staff) may change a PO's lines until it is approved."""
         return not self.is_approved and self.details_editable_by(user)
 
     def details_editable_by(self, user):
         """Dates, PI/LC and delivery details stay editable after approval."""
-        return user.is_staff or user.is_superuser or (self.created_by_id is not None and self.created_by_id == user.id)
+        return self.order.editable_by(user)
 
     @property
     def po_no(self):

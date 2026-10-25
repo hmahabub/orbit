@@ -39,7 +39,7 @@
     <div class="erp-card p-3 small text-muted">
       Created {{ order.created_at|date:"d M Y H:i" }}{% if order.created_by %} by {{ order.created_by }}{% endif %}<br>
       Last updated {{ order.updated_at|date:"d M Y H:i" }}
-      {% if can_delete_order %}
+      {% if can_edit %}
       <form method="post" action="{% url 'order_delete' order.pk %}" class="mt-2">{% csrf_token %}
         <button class="btn btn-sm btn-outline-danger" data-confirm="Delete {{ order.po_number }} with all its lines, BOM, costing and supplier POs?"><i class="bi bi-trash"></i> Delete order</button>
       </form>

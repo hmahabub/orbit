@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+from functools import wraps
 
 from django.conf import settings
 from django.contrib import messages
@@ -38,8 +39,17 @@ DEFAULT_COST_HEADS = ['CM', 'Washing', 'Embellishment', 'Testing', 'Commercial',
 # helpers
 # --------------------------------------------------------------------------
 
-def can_delete_order(user, order):
-    return is_staff(user) or (order.created_by_id is not None and order.created_by_id == user.id)
+def owner_required(view):
+    """For views under orders/<pk>/ that change something: only the order's
+    creator, or staff, may go ahead. Everyone else gets 403."""
+    @wraps(view)
+    def wrapper(request, pk, *args, **kwargs):
+        order = get_object_or_404(Order, pk=pk)
+        if not order.editable_by(request.user):
+            who = order.creator_name or 'its creator'
+            raise PermissionDenied(f'{order.po_number} belongs to {who}; only they or a staff user can change it.')
+        return view(request, pk, *args, **kwargs)
+    return wrapper
 
 
 def display_name(user):
@@ -56,16 +66,9 @@ def require_staff(user):
 
 
 def require_po_lines(user, po):
-    """Lines, moving, merging and deleting: the PO's raiser or staff, and only before approval."""
+    """Lines, moving, merging and deleting: only before approval (ownership is checked by owner_required)."""
     if po.is_approved:
         raise PermissionDenied(f'{po.po_no} is approved and locked.')
-    if not po.editable_by(user):
-        raise PermissionDenied(f'{po.po_no} was raised by someone else; only they or a staff user can change it.')
-
-
-def require_po_details(user, po):
-    if not po.details_editable_by(user):
-        raise PermissionDenied(f'{po.po_no} was raised by someone else; only they or a staff user can change it.')
 
 
 def to_dec(value, default=None):
@@ -189,7 +192,7 @@ def order_detail(request, pk):
     ctx = {
         'order': order, 'tab': tab, 'tabs': tab_states(order), 'lines': lines, 'line': line,
         'is_staff': is_staff(user), 'sg': suggestions(), 'size_count': range(SIZE_COUNT),
-        'can_delete_order': can_delete_order(user, order),
+        'can_edit': order.editable_by(user),
     }
 
     if tab == 'order':
@@ -323,6 +326,7 @@ def bom_download(request, pk, line_id, fmt):
 
 @login_required
 @require_POST
+@owner_required
 def order_update(request, pk):
     order = get_object_or_404(Order, pk=pk)
     form = OrderForm(request.POST, instance=order)
@@ -337,10 +341,9 @@ def order_update(request, pk):
 
 @login_required
 @require_POST
+@owner_required
 def order_delete(request, pk):
     order = get_object_or_404(Order, pk=pk)
-    if not can_delete_order(request.user, order):
-        raise PermissionDenied('Only the user who created this order, or a staff user, can delete it.')
     order.delete()
     messages.success(request, f'{order.po_number} deleted.')
     return redirect('home')
@@ -348,6 +351,7 @@ def order_delete(request, pk):
 
 @login_required
 @require_POST
+@owner_required
 def advance(request, pk, stage):
     """'Save & continue' — unlock the next tab once the current one is complete."""
     order = get_object_or_404(Order, pk=pk)
@@ -387,6 +391,7 @@ def advance(request, pk, stage):
 
 @login_required
 @require_POST
+@owner_required
 def line_add(request, pk):
     order = get_object_or_404(Order, pk=pk)
     form = OrderLineForm(request.POST)
@@ -402,6 +407,7 @@ def line_add(request, pk):
 
 @login_required
 @require_POST
+@owner_required
 def line_update(request, pk, line_id):
     line = get_object_or_404(OrderLine, pk=line_id, order_id=pk)
     form = OrderLineForm(request.POST, instance=line, prefix=f'ln{line.pk}')
@@ -415,6 +421,7 @@ def line_update(request, pk, line_id):
 
 @login_required
 @require_POST
+@owner_required
 def line_delete(request, pk, line_id):
     line = get_object_or_404(OrderLine, pk=line_id, order_id=pk)
     line.delete()
@@ -428,6 +435,7 @@ def line_delete(request, pk, line_id):
 
 @login_required
 @require_POST
+@owner_required
 def assortment_save(request, pk, line_id):
     line = get_object_or_404(OrderLine, pk=line_id, order_id=pk)
     post = request.POST
@@ -479,6 +487,7 @@ def cons_from_req(req, qty):
 
 @login_required
 @require_POST
+@owner_required
 def bom_item_add(request, pk, line_id):
     line = get_object_or_404(OrderLine, pk=line_id, order_id=pk)
     form = BOMItemForm(request.POST)
@@ -506,6 +515,7 @@ def bom_item_add(request, pk, line_id):
 
 @login_required
 @require_POST
+@owner_required
 def bom_item_delete(request, pk, item_id):
     item = get_object_or_404(BOMItem.objects.select_related('line__order'), pk=item_id, line__order_id=pk)
     item.delete()
@@ -515,6 +525,7 @@ def bom_item_delete(request, pk, item_id):
 
 @login_required
 @require_POST
+@owner_required
 def bom_save(request, pk, line_id):
     """Saves a style's whole BOM sheet — material cells and row cells — in one
     go. Per row, whichever of consumption / total req. was typed last wins
@@ -532,6 +543,7 @@ def bom_save(request, pk, line_id):
             item.name = post.get(key + 'name', '').strip() or item.name
             item.placement = post.get(key + 'placement', '').strip()
             item.unit = post.get(key + 'unit', '').strip()
+            item.supplier = post.get(key + 'supplier', item.supplier).strip()
             if post.get(key + 'category') in dict(MATERIAL_TYPES):
                 item.category = post[key + 'category']
             if post.get(key + 'allocation') in allocations:
@@ -565,6 +577,7 @@ def bom_save(request, pk, line_id):
 
 @login_required
 @require_POST
+@owner_required
 def costing_save(request, pk, line_id):
     line = get_object_or_404(OrderLine, pk=line_id, order_id=pk)
     for row in BOMRow.objects.filter(item__line=line):
@@ -578,6 +591,7 @@ def costing_save(request, pk, line_id):
 
 @login_required
 @require_POST
+@owner_required
 def extra_add(request, pk, line_id):
     line = get_object_or_404(OrderLine, pk=line_id, order_id=pk)
     form = CostExtraForm(request.POST)
@@ -592,6 +606,7 @@ def extra_add(request, pk, line_id):
 
 @login_required
 @require_POST
+@owner_required
 def extra_delete(request, pk, extra_id):
     extra = get_object_or_404(CostExtra.objects.select_related('line__order'), pk=extra_id, line__order_id=pk)
     extra.delete()
@@ -604,6 +619,7 @@ def extra_delete(request, pk, extra_id):
 
 @login_required
 @require_POST
+@owner_required
 def po_assign(request, pk):
     """Saves the supplier typed against each not-yet-ordered material, then
     (when the Generate button was used) raises the POs, pending approval."""
@@ -631,6 +647,7 @@ def po_assign(request, pk):
 
 @login_required
 @require_POST
+@owner_required
 def po_move(request, pk, po_id):
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
     require_po_lines(request.user, po)
@@ -652,6 +669,7 @@ def po_move(request, pk, po_id):
 
 @login_required
 @require_POST
+@owner_required
 def po_merge(request, pk):
     order = get_object_or_404(Order, pk=pk)
     ids = [int(v) for v in request.POST.getlist('po') if v.isdigit()]
@@ -672,9 +690,9 @@ def po_merge(request, pk):
 
 @login_required
 @require_POST
+@owner_required
 def po_update(request, pk, po_id):
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
-    require_po_details(request.user, po)
     form = SupplierPOForm(request.POST, instance=po, prefix=f'po{po.pk}')
     if form.is_valid():
         updated = form.save(commit=False)
@@ -697,6 +715,7 @@ def po_update(request, pk, po_id):
 
 @login_required
 @require_POST
+@owner_required
 def po_lines_save(request, pk, po_id):
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
     require_po_lines(request.user, po)
@@ -713,6 +732,7 @@ def po_lines_save(request, pk, po_id):
 
 @login_required
 @require_POST
+@owner_required
 def po_delete(request, pk, po_id):
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
     require_po_lines(request.user, po)
@@ -775,6 +795,7 @@ def po_reopen(request, pk, po_id):
 
 @login_required
 @require_POST
+@owner_required
 def po_resubmit(request, pk, po_id):
     """The raiser sends a rejected PO back for approval after correcting it."""
     po = get_object_or_404(SupplierPO, pk=po_id, order_id=pk)
