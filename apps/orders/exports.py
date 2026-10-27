@@ -149,16 +149,29 @@ class Sheet:
 # --------------------------------------------------------------------------
 
 def po_lines_with_detail(po):
-    """The PO's lines, each carrying the detail of the BOM rows it was raised
-    from: placement, body color and garment size."""
+    """The PO's lines, each with `breakdown`: one entry per BOM row it was
+    raised from (body color, size, order qty, consumption / pc, requirement),
+    so the PO shows the same color- and size-wise detail as the BOM. A line
+    no longer linked to the BOM gets one empty breakdown entry."""
     lines = list(po.lines.prefetch_related('bom_rows__item__line__assortment'))
     for line in lines:
-        rows = list(line.bom_rows.all())
+        rows = sorted(line.bom_rows.all(), key=lambda r: (r.item.position, r.item_id, r.position, r.id))
         line.style = line.style or joined(row.item.line.style for row in rows)
         line.placement = joined(row.item.placement for row in rows)
-        line.body_color = joined(row.body_color for row in rows) or ('All colors' if rows else '')
-        line.garment_size = joined(row.size_label for row in rows)
+        line.breakdown = [{
+            'body_color': row.body_label,
+            'size': row.size_label,
+            'order_qty': row.order_qty,
+            'consumption': row.consumption,
+            'requirement': row.requirement,
+        } for row in rows] or [{'body_color': '', 'size': '', 'order_qty': None, 'consumption': None,
+                                'requirement': None}]
+        line.span = len(line.breakdown)
     return lines
+
+
+def cons_text(value):
+    return '' if value is None else (f'{value:.6f}'.rstrip('0').rstrip('.') or '0')
 
 
 def po_details(po):
@@ -182,35 +195,48 @@ def po_approval(po):
     return f'DRAFT — NOT APPROVED ({po.get_approval_display().lower()})', ''
 
 
-PO_COLUMNS = ['#', 'Style', 'Item', 'Placement', 'Body color', 'Color combination', 'Size', 'Spec', 'Qty', 'Unit',
-              'Price', 'Amount']
+# Line-level columns, then the BOM breakdown (body color .. req.), then what is ordered.
+PO_COLUMNS = ['#', 'Style', 'Item', 'Placement', 'Color combination', 'Spec', 'Body color', 'Size', 'Order qty',
+              'Cons. / pc', 'Req.', 'PO qty', 'Unit', 'Price', 'Amount']
+PO_LINE_COLS = (1, 2, 3, 4, 5, 6, 12, 13, 14, 15)   # merged down a line's breakdown rows
 
 
 def supplier_po_xlsx(po, prepared_by):
     order = po.order
-    sh = Sheet(po.po_no, [5, 21, 34, 18, 16, 18, 9, 12, 11, 8, 11, 14])
+    sh = Sheet(po.po_no, [5, 18, 30, 15, 16, 10, 14, 7, 10, 10, 11, 11, 7, 10, 13])
     warning, checked_by = po_approval(po)
     sh.title(f'Purchase Order · {po.type_label}', po.po_no, warning)
     sh.info([(label, value, 'dd mmm yyyy') if isinstance(value, datetime.date) else (label, value)
-             for label, value in po_details(po)], spans=(((1, 2), (3, 5)), ((6, 7), (8, 12))))
+             for label, value in po_details(po)], spans=(((1, 2), (3, 6)), ((7, 9), (10, 15))))
 
     sh.header(PO_COLUMNS)
     first = sh.row
     for n, line in enumerate(po_lines_with_detail(po), start=1):
-        for col, value in enumerate([n, line.style, line.description, line.placement, line.body_color, line.color,
-                                     line.garment_size, line.spec], start=1):
-            sh.cell(col, value, wrap=col in (2, 3, 4, 5, 6), align='center' if col == 1 else None)
-        sh.cell(9, float(line.qty), fmt=QTY)
-        sh.cell(10, line.unit)
-        sh.cell(11, float(line.price) if line.price is not None else None, fmt=RATE)
-        sh.cell(12, f'=I{sh.row}*K{sh.row}', fmt=MONEY)
-        sh.row += 1
+        top = sh.row
+        for i, part in enumerate(line.breakdown):
+            is_top = i == 0
+            for col, value in enumerate([n, line.style, line.description, line.placement, line.color, line.spec],
+                                        start=1):
+                sh.cell(col, value if is_top else None, wrap=col in (2, 3, 4, 5), align='center' if col == 1 else None)
+            sh.cell(7, part['body_color'])
+            sh.cell(8, part['size'], align='center')
+            sh.cell(9, part['order_qty'], fmt=QTY)
+            sh.cell(10, float(part['consumption']) if part['consumption'] is not None else None, fmt=CONS)
+            sh.cell(11, float(part['requirement']) if part['requirement'] is not None else None, fmt=MONEY)
+            sh.cell(12, float(line.qty) if is_top else None, fmt=QTY, bold=True)
+            sh.cell(13, line.unit if is_top else None)
+            sh.cell(14, (float(line.price) if line.price is not None else None) if is_top else None, fmt=RATE)
+            sh.cell(15, f'=L{top}*N{top}' if is_top else None, fmt=MONEY)
+            sh.row += 1
+        if line.span > 1:
+            for col in PO_LINE_COLS:
+                sh.ws.merge_cells(start_row=top, start_column=col, end_row=sh.row - 1, end_column=col)
     last = sh.row - 1
     sh.cell(1, f'Total ({order.currency})', bold=True, fill=TOTAL_FILL, align='right')
-    for col in range(2, 12):
+    for col in range(2, 15):
         sh.cell(col, fill=TOTAL_FILL)
-    sh.merge(1, 11)
-    sh.cell(12, f'=SUM(L{first}:L{last})' if last >= first else 0, bold=True, fmt=MONEY, fill=TOTAL_FILL)
+    sh.merge(1, 14)
+    sh.cell(15, f'=SUM(O{first}:O{last})' if last >= first else 0, bold=True, fmt=MONEY, fill=TOTAL_FILL)
     sh.row += 1
 
     if po.notes:
@@ -350,14 +376,25 @@ def supplier_po_pdf(po, prepared_by):
     pdf.details(po_details(po))
     p, right = pdf.p, pdf.right
     data = [[p(label, pdf.head) for label in PO_COLUMNS]]
+    group_starts = []
     for n, line in enumerate(po_lines_with_detail(po), start=1):
-        data.append([p(n), p(line.style), p(line.description), p(line.placement), p(line.body_color), p(line.color),
-                     p(line.garment_size), p(line.spec), p(f'{line.qty:,.0f}', right), p(line.unit),
-                     p(f'{line.price:,.4f}' if line.price is not None else '', right),
-                     p(f'{line.amount:,.2f}', right)])
-    data.append([p(f'Total ({po.order.currency})', pdf.right_bold)] + [''] * 10
+        group_starts.append(len(data))
+        for i, part in enumerate(line.breakdown):
+            top = i == 0
+            data.append([
+                p(n if top else ''), p(line.style if top else ''), p(line.description if top else ''),
+                p(line.placement if top else ''), p(line.color if top else ''), p(line.spec if top else ''),
+                p(part['body_color']), p(part['size']),
+                p(f"{part['order_qty']:,}" if part['order_qty'] is not None else '', right),
+                p(cons_text(part['consumption']), right),
+                p(f"{part['requirement']:,.2f}" if part['requirement'] is not None else '', right),
+                p(f'{line.qty:,.0f}' if top else '', pdf.right_bold), p(line.unit if top else ''),
+                p(f'{line.price:,.4f}' if top and line.price is not None else '', right),
+                p(f'{line.amount:,.2f}' if top else '', right)])
+    data.append([p(f'Total ({po.order.currency})', pdf.right_bold)] + [''] * 13
                 + [p(f'{po.total_amount:,.2f}', pdf.right_bold)])
-    pdf.table(data, [3, 10, 18, 10, 9, 10, 5, 7, 7, 5, 7, 9], total_row=True)
+    lines_between = [('LINEABOVE', (0, r), (-1, r), 1.2, pdf.navy) for r in group_starts[1:]]
+    pdf.table(data, [4, 9, 14, 9, 9, 6, 8, 5, 7, 7, 8, 7, 5, 7, 8], lines_between, total_row=True)
     if po.notes:
         pdf.add(pdf.Spacer(1, 4 * pdf.mm))
         pdf.add(p(f'Notes: {po.notes}'))

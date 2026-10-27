@@ -262,3 +262,7 @@ fieldset.order-workspace:disabled .add-row, fieldset.order-workspace:disabled .b
 /* Links (View, Excel, PDF, next tab) only read or download, so they stay usable.
    Bootstrap would otherwise switch off every .btn inside a disabled fieldset. */
 fieldset.order-workspace:disabled a.btn { pointer-events: auto; opacity: 1; }
+.po-sheet-lines th.bd { background: #2b4166; }
+.po-sheet-lines td.bd { background: #fbfcfd; }
+.po-sheet-lines tr.line-first > td { border-top: 2px solid #9fb0c3; }
+.po-sheet-lines td { vertical-align: middle; }
