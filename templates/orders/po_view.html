@@ -48,32 +48,31 @@
 
   <div class="table-responsive">
     <table class="table table-sm table-bordered align-middle po-sheet-lines">
-      <thead><tr><th>#</th><th>Style</th><th>Item</th><th>Placement</th><th>Color combination</th><th>Spec</th>
-        <th class="bd">Body color</th><th class="bd">Size</th><th class="bd text-end">Order qty</th><th class="bd text-end">Cons. / pc</th><th class="bd text-end">Req.</th>
-        <th class="text-end">PO qty</th><th>Unit</th><th class="text-end">Price</th><th class="text-end">Amount</th></tr></thead>
+      <thead><tr><th>Sl</th><th>Type</th><th>Item</th><th>Placement</th><th>Body color</th><th>Color combination</th>
+        <th>Size / spec</th><th class="text-end">Order qty</th><th class="text-end">Cons. / pc</th><th class="text-end">Total req.</th>
+        <th>Unit</th><th class="text-end">PO qty</th><th class="text-end">Price</th><th class="text-end">Amount</th></tr></thead>
       <tbody>
       {% for l in lines %}
         {% for part in l.breakdown %}
         <tr class="{% if forloop.first %}line-first{% endif %}">
           {% if forloop.first %}
-          <td rowspan="{{ l.span }}">{{ forloop.parentloop.counter }}</td><td rowspan="{{ l.span }}">{{ l.style }}</td>
-          <td rowspan="{{ l.span }}">{{ l.description }}</td><td rowspan="{{ l.span }}">{{ l.placement }}</td>
-          <td rowspan="{{ l.span }}">{{ l.color }}</td><td rowspan="{{ l.span }}">{{ l.spec }}</td>
+          <td rowspan="{{ l.span }}" class="text-center">{{ forloop.parentloop.counter }}</td><td rowspan="{{ l.span }}">{{ l.type }}</td>
+          <td rowspan="{{ l.span }}">{{ l.item_label }}</td><td rowspan="{{ l.span }}">{{ l.placement }}</td>
           {% endif %}
-          <td class="bd">{{ part.body_color }}</td><td class="bd">{{ part.size }}</td>
-          <td class="bd text-end">{{ part.order_qty|num:0 }}</td><td class="bd text-end">{{ part.consumption|fixed:6 }}</td>
-          <td class="bd text-end">{{ part.requirement|num:2 }}</td>
+          <td>{{ part.body_color }}</td><td>{{ part.color_combo }}</td><td>{{ part.size_spec }}</td>
+          <td class="text-end">{{ part.order_qty|num:0 }}</td><td class="text-end">{{ part.consumption|fixed:6 }}</td>
+          <td class="text-end">{{ part.requirement|num:2 }}</td>
           {% if forloop.first %}
-          <td rowspan="{{ l.span }}" class="text-end fw-bold">{{ l.qty|num:0 }}</td><td rowspan="{{ l.span }}">{{ l.unit }}</td>
+          <td rowspan="{{ l.span }}">{{ l.unit }}</td><td rowspan="{{ l.span }}" class="text-end fw-bold">{{ l.qty|num:0 }}</td>
           <td rowspan="{{ l.span }}" class="text-end">{{ l.price|num:4 }}</td><td rowspan="{{ l.span }}" class="text-end">{{ l.amount|num:2 }}</td>
           {% endif %}
         </tr>
         {% endfor %}
       {% empty %}
-        <tr><td colspan="15" class="text-center text-muted">No lines.</td></tr>
+        <tr><td colspan="14" class="text-center text-muted">No lines.</td></tr>
       {% endfor %}
       </tbody>
-      <tfoot><tr><th colspan="14" class="text-end">Total ({{ po.order.currency }})</th><th class="text-end">{{ po.total_amount|num:2 }}</th></tr></tfoot>
+      <tfoot><tr><th colspan="13" class="text-end">Total ({{ po.order.currency }})</th><th class="text-end">{{ po.total_amount|num:2 }}</th></tr></tfoot>
     </table>
   </div>
 

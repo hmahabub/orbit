@@ -232,7 +232,7 @@ class WorkflowTests(TestCase):
         self.assertTrue(pdf.content.startswith(b'%PDF'))
         # ...and the on-screen view shows the same data without downloading.
         view = self.client.get(reverse('po_view', args=[po.pk]))
-        for expected in [po.po_no, 'PI-77', 'Gazipur', 'Chattogram port', 'Main body', 'STEEL', '58&quot;', 'Cons. / pc',
+        for expected in [po.po_no, 'PI-77', 'Gazipur', 'Chattogram port', 'Main body', 'STEEL', '58&quot;', 'Cons. / pc', 'Total req.', 'Fabric',
                          'DRAFT — NOT APPROVED', 'Prepared by', 'merch']:
             self.assertContains(view, expected, msg_prefix=expected)
 
